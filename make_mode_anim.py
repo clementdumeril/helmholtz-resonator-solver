@@ -1,20 +1,20 @@
 """
-Animation du MODE RESONANT du resonateur de Helmholtz a col ouvert.
+Animation of the RESONANT MODE of the open-neck Helmholtz resonator.
 
-Resout l'equation de Helmholtz en regime harmonique a f0, avec condition
-d'impedance de rayonnement a la bouche (piston bafle), puis anime
+Solves the Helmholtz equation in the harmonic regime at f0, with a
+radiation-impedance condition at the mouth (baffled piston), then animates
 
         p(r,z,t) = Re{ P(r,z) * exp(i*w*t) }
 
-sur plusieurs periodes. On voit la cavite se pressuriser et se depressuriser
-pendant que l'air fait des allers-retours dans le col.
+over several periods. The cavity is seen to pressurise and depressurise while
+the air moves back and forth through the neck.
 
-Le panneau de droite montre la signature meme d'un resonateur masse-ressort :
-la pression de cavite et la vitesse au col sont en QUADRATURE (dephasees de 90
-degres). La cavite joue le ressort, le bouchon d'air du col joue la masse.
+The right-hand panel shows the very signature of a mass-spring resonator: the
+cavity pressure and the neck velocity are in QUADRATURE, 90 degrees apart. The
+cavity is the spring, the plug of air in the neck is the mass.
 
-Sortie : plots/helmholtz_mode.gif, data/helmholtz_mode.npz
-Env : MA_F (frequence, 209.84) MA_H (pas mm, 0.5) MA_FRAMES (72) MA_PERIODES (2)
+Output: plots/helmholtz_mode.gif, data/helmholtz_mode.npz
+Env: MA_F (frequency, 209.84) MA_H (step in mm, 0.5) MA_FRAMES (72) MA_PERIODS (2)
 """
 import os
 import numpy as np
@@ -33,7 +33,7 @@ Z_TOP = L_NECK + H_CAV
 FREQ = float(os.environ.get("MA_F", 209.84))
 H = float(os.environ.get("MA_H", 0.5))*1e-3
 NFR = int(os.environ.get("MA_FRAMES", 72))
-NPER = float(os.environ.get("MA_PERIODES", 2))
+NPER = float(os.environ.get("MA_PERIODS", 2))
 W = 2*np.pi*FREQ; K2 = (W/C)**2
 SRC_Z, SRC_W, SRC_A = L_NECK + 0.5*H_CAV, 0.01, 1.0e4
 ka = W/C*R_NECK
@@ -83,22 +83,22 @@ def solve(h):
 
 
 r, z, fl, P = solve(H)
-# normalisation : amplitude de cavite = 1 Pa (systeme lineaire)
+# normalisation: cavity amplitude = 1 Pa (the system is linear)
 j_cav = int(round(0.08/H)); P = P/abs(P[0, j_cav])
-print(f"f = {FREQ} Hz | grille {fl.shape} | {fl.sum()} noeuds")
+print(f"f = {FREQ} Hz | grid {fl.shape} | {fl.sum()} nodes")
 
-# --- sondes ---
+# --- probes ---
 j_mouth = 0
 P_cav = P[0, j_cav]
-# vitesse axiale a la bouche : v = -(1/(i*w*rho)) dP/dz
+# axial velocity at the mouth: v = -(1/(i*w*rho)) dP/dz
 dPdz_mouth = (P[0, 1] - P[0, 0])/H
 V_mouth = -dPdz_mouth/(1j*W*RHO)
-print(f"|P| cavite = {abs(P_cav):.3f} Pa | |v| bouche = {abs(V_mouth)*1e3:.3f} mm/s")
+print(f"|P| cavity = {abs(P_cav):.3f} Pa | |v| mouth = {abs(V_mouth)*1e3:.3f} mm/s")
 dphi = np.angle(V_mouth) - np.angle(P_cav)
 dphi = (dphi + np.pi) % (2*np.pi) - np.pi
-print(f"dephasage vitesse/pression = {np.degrees(dphi):+.1f} deg  (quadrature attendue)")
+print(f"velocity/pressure phase shift = {np.degrees(dphi):+.1f} deg  (quadrature expected)")
 
-# --- miroir pour une coupe meridienne complete ---
+# --- mirrored for a complete meridian section ---
 r_full = np.concatenate([-r[::-1], r[1:]])
 mir = lambda a: np.concatenate([a[::-1, :], a[1:, :]], axis=0)
 fl_f = mir(fl); P_f = mir(P)
@@ -122,18 +122,18 @@ for s in (1, -1):
 axF.plot([Z_TOP*1e3]*2, [-R_CAV*1e3, R_CAV*1e3], "k", lw=1.2)
 axF.plot([0, 0], [R_NECK*1e3, R_CAV*1e3*1.15], "k", lw=2.5)
 axF.plot([0, 0], [-R_NECK*1e3, -R_CAV*1e3*1.15], "k", lw=2.5)
-axF.annotate("bouche\n(ouverte)", (2, 26), fontsize=8, color="0.35")
-axF.annotate("cavité", (80, 30), fontsize=9, color="0.35")
+axF.annotate("mouth\n(open)", (2, 26), fontsize=8, color="0.35")
+axF.annotate("cavity", (80, 30), fontsize=9, color="0.35")
 
 ph = np.linspace(0, 2*np.pi*NPER, 600)
 pc = (P_cav*np.exp(1j*ph)).real
 vm = (V_mouth*np.exp(1j*ph)).real
 vm_n = vm/np.abs(vm).max()
-axS.plot(ph/(2*np.pi), pc, "C3", lw=1.6, label="pression en cavité")
-axS.plot(ph/(2*np.pi), vm_n, "C0", lw=1.6, label="vitesse au col (normalisée)")
+axS.plot(ph/(2*np.pi), pc, "C3", lw=1.6, label="cavity pressure")
+axS.plot(ph/(2*np.pi), vm_n, "C0", lw=1.6, label="neck velocity (normalised)")
 axS.axhline(0, color="0.7", lw=.8)
-axS.set(xlabel="temps (en périodes)", ylabel="amplitude",
-        title=f"quadrature : {np.degrees(dphi):+.0f}°")
+axS.set(xlabel="time (in periods)", ylabel="amplitude",
+        title=f"quadrature: {np.degrees(dphi):+.0f} deg")
 axS.legend(fontsize=8, loc="upper right"); axS.grid(alpha=.3)
 cur = axS.axvline(0, color="k", lw=1.3)
 sup = fig.suptitle("", fontsize=12, y=0.97)
@@ -142,8 +142,8 @@ def update(k):
     fld = np.where(fl_f, (P_f*np.exp(1j*phases[k])).real, np.nan)
     qm.set_array(fld.ravel())
     cur.set_xdata([phases[k]/(2*np.pi)]*2)
-    sup.set_text(f"Mode résonant du résonateur de Helmholtz — f₀ = {FREQ:.1f} Hz   "
-                 f"(t = {phases[k]/(2*np.pi):.2f} période)")
+    sup.set_text(f"Resonant mode of the Helmholtz resonator - f0 = {FREQ:.1f} Hz   "
+                 f"(t = {phases[k]/(2*np.pi):.2f} period)")
     return qm, cur, sup
 
 anim = FuncAnimation(fig, update, frames=NFR, blit=False)
@@ -155,4 +155,4 @@ fr = [f.convert("RGB").quantize(colors=96, method=Image.MEDIANCUT) for f in Imag
 fr[0].save(out, save_all=True, append_images=fr[1:], duration=55, loop=0, optimize=True)
 np.savez_compressed("data/helmholtz_mode.npz", r=r, z=z, fluid=fl, P=P,
                     freq=FREQ, P_cav=P_cav, V_mouth=V_mouth, dphi=dphi)
-print(f"Anime : {out} ({NFR} images, {os.path.getsize(out)/1e6:.1f} Mo)")
+print(f"Animation: {out} ({NFR} frames, {os.path.getsize(out)/1e6:.1f} MB)")

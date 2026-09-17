@@ -6,13 +6,13 @@ __pycache__/
 # Jupyter
 .ipynb_checkpoints/
 
-# Environnements virtuels
+# Virtual environments
 .venv/
 venv/
 env/
 ENV/
 
-# IDE / éditeurs
+# IDEs and editors
 .idea/
 .vscode/
 .claude/
@@ -21,30 +21,42 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Dossiers temporaires / frames d'animation
+# Temporary folders and animation frames
 temp_frames/
 temp_*/
 
-# Poids externes lourds hors-sujet (ex. vgg16.h5)
+# Heavy off-topic external weights (e.g. vgg16.h5)
 *.h5
 
-# Runs intermediaires des etudes de convergence et de sensibilite
-# (volumineux ; les resultats extraits sont dans convergence_f0.npz,
-#  sponge_sensitivity.npz et pinn_seeds.npz)
+# Intermediate runs of the convergence and sensitivity studies. They are bulky;
+# the extracted results live in convergence_f0.npz and sponge_sensitivity.npz.
 data/open_resonator_h*.npz
 data/open_resonator_sp_*.npz
-data/train_pinn_seed*.npz
-models/pinn_marching_seed*.pth
-plots/train_pinn_seed*.png
 plots/open_resonator_diag_*.png
 
-# Archive locale des runs PINN infructueux (hors depot)
+# Raw field snapshots for the animation: 27 MB, and regenerated in ~5 min by
+#   OR_TMS=120 OR_NFRAMES=420 OR_TAG=_anim python fdm_open_resonator.py
+data/open_resonator_anim.npz
+
+# Local archive of earlier exploratory work, kept out of the repository
 _archive/
 
-# Points de reprise des reseaux : volumineux et entierement reproductibles
-models/
+# Audio recordings: supplied by whoever runs the experiment, not by the repo
+*.wav
+*.m4a
 
-# Runs PINN intermediaires : ~25 Mo de champs de sonde. Les historiques dont
-# derivent tous les tableaux du rapport sont consolides dans pinn_runs_hist.npz
-data/pinn_open_*.npz
-data/pinn_scat_*.npz
+# LaTeX build products
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.toc
+
+# Leftovers of earlier exploratory work, superseded and archived locally
+data/pinn_*.npz
+data/train_pinn_seed*.npz
+plots/train_pinn_seed*.png
+models/

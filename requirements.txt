@@ -4,4 +4,3 @@ matplotlib>=3.7
 pandas>=2.0
 notebook>=7.0
 nbconvert>=7.0
-torch>=2.0          # volet PINN transitoire (pinn_3d_transient.ipynb, train_pinn.py)

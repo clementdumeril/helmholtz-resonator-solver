@@ -1,13 +1,13 @@
 """
-Animation : propagation de l'onde, entree par le col, ACCUMULATION et RESONANCE
-dans un resonateur de Helmholtz a col ouvert (domaine exterieur maille).
+Animation: wave propagation, entry through the neck, BUILD-UP and RESONANCE in
+an open-neck Helmholtz resonator with a meshed exterior domain.
 
-Lit data/open_resonator_anim.npz (produit par fdm_open_resonator.py) et rend
-plots/helmholtz_resonance.gif :
-  * panneau haut  : coupe meridienne (miroir) du champ de pression, exterieur inclus ;
-  * panneau bas   : signaux sonde exterieure / sonde cavite + curseur temporel.
+Reads data/open_resonator_anim.npz (produced by fdm_open_resonator.py) and
+renders plots/helmholtz_resonance.gif:
+  * top panel    : mirrored meridian section of the pressure field, exterior included;
+  * bottom panel : exterior and cavity probe signals, with a time cursor.
 
-Le champ est renormalise (systeme lineaire) pour que le PIC INCIDENT vaille 1 Pa.
+The field is rescaled (the system is linear) so that the INCIDENT PEAK is 1 Pa.
 """
 import os
 import numpy as np
@@ -26,18 +26,18 @@ f0 = float(d["f0_meas"])
 
 R_NECK, R_CAV, L_NECK, Z_TOP = 0.01, 0.04, 0.04, 0.12
 
-# --- renormalisation : pic incident = 1 Pa (systeme lineaire) ---
+# --- rescaling: incident peak = 1 Pa (the system is linear) ---
 K = 1.0/np.abs(p_out).max()
 frames = frames*K; p_cav = p_cav*K; p_out = p_out*K
 
-# --- miroir en r pour une coupe meridienne complete ---
+# --- mirrored in r for a complete meridian section ---
 r_full = np.concatenate([-r[::-1], r[1:]])
 def mirror(a):
     return np.concatenate([a[::-1, :], a[1:, :]], axis=0)
 dom_f = mirror(dom)
-vmax = 1.15*np.abs(p_cav).max()          # echelle calee sur la resonance (la source sature)
+vmax = 1.15*np.abs(p_cav).max()          # scale set by the resonance (the source saturates)
 
-# sous-echantillonnage temporel (poids du GIF)
+# temporal subsampling, to keep the GIF small
 STEP = int(os.environ.get("AN_STEP", 2))
 idx = np.arange(0, len(ft), STEP)
 
@@ -51,52 +51,52 @@ qm = axF.pcolormesh(zmm, rmm, np.where(dom_f, mirror(frames[0]), np.nan),
                     cmap="RdBu_r", vmin=-vmax, vmax=vmax, shading="auto")
 axF.set(xlabel="z (mm)", ylabel="r (mm)", title="")
 axF.set_aspect("equal")
-axF.set_xlim(-72, 122); axF.set_ylim(-64, 64)     # masque les couches absorbantes
+axF.set_xlim(-72, 122); axF.set_ylim(-64, 64)     # hides the absorbing layers
 fig.colorbar(qm, ax=axF, fraction=0.026, pad=0.012, label="p (Pa)")
 axF.plot(-55, 0, "k*", ms=8); axF.annotate("source", (-55, -9), fontsize=8,
                                            color="0.3", ha="center")
 
-# contours de la geometrie
+# outline of the geometry
 for sgn in (1, -1):
     axF.plot([0, L_NECK*1e3], [sgn*R_NECK*1e3]*2, "k", lw=1.1)
     axF.plot([L_NECK*1e3, L_NECK*1e3], [sgn*R_NECK*1e3, sgn*R_CAV*1e3], "k", lw=1.1)
     axF.plot([L_NECK*1e3, Z_TOP*1e3], [sgn*R_CAV*1e3]*2, "k", lw=1.1)
     axF.plot([0, 0], [sgn*R_NECK*1e3, sgn*rmm.max()], "k", lw=2.2)   # baffle
 axF.plot([Z_TOP*1e3, Z_TOP*1e3], [-R_CAV*1e3, R_CAV*1e3], "k", lw=1.1)
-axF.annotate("extérieur", (-66, 52), fontsize=8.5, color="0.35")
-axF.annotate("col ouvert", (20, 26), fontsize=8.5, color="0.35", ha="center")
-axF.annotate("cavité", (80, 50), fontsize=8.5, color="0.35", ha="center")
+axF.annotate("exterior", (-66, 52), fontsize=8.5, color="0.35")
+axF.annotate("open neck", (20, 26), fontsize=8.5, color="0.35", ha="center")
+axF.annotate("cavity", (80, 50), fontsize=8.5, color="0.35", ha="center")
 axF.annotate("baffle", (3, 56), fontsize=8.5, color="0.35", ha="left")
 
-axS.plot(t*1e3, p_out, color="0.6", lw=0.8, label="sonde extérieure (impulsion incidente)")
-axS.plot(t*1e3, p_cav, "C0", lw=0.9, label="sonde cavité (résonance)")
+axS.plot(t*1e3, p_out, color="0.6", lw=0.8, label="exterior probe (incident pulse)")
+axS.plot(t*1e3, p_cav, "C0", lw=0.9, label="cavity probe (resonance)")
 axS.set(xlabel="t (ms)", ylabel="p (Pa)", xlim=(0, ft.max()*1e3))
 axS.grid(alpha=0.3); axS.legend(fontsize=8, loc="upper right")
 cur = axS.axvline(ft[0]*1e3, color="C3", lw=1.4)
 sup = fig.suptitle("", fontsize=10.5, y=0.978)
 
 def phase_label(tt):
-    if tt < 0.010: return "l'impulsion se propage"
-    if tt < 0.022: return "l'onde entre par le col, la cavité se remplit"
-    return "impulsion partie : la cavité sonne seule"
+    if tt < 0.010: return "the pulse propagates"
+    if tt < 0.022: return "the wave enters through the neck, the cavity fills"
+    return "the pulse has gone: the cavity rings on its own"
 
 def update(k):
     i = idx[k]
     qm.set_array(np.where(dom_f, mirror(frames[i]), np.nan).ravel())
     cur.set_xdata([ft[i]*1e3, ft[i]*1e3])
-    sup.set_text(f"Résonateur de Helmholtz à col ouvert  |  t = {ft[i]*1e3:5.1f} ms  "
-                 f"—  {phase_label(ft[i])}   (f₀ ≈ {f0:.0f} Hz)")
+    sup.set_text(f"Open-neck Helmholtz resonator  |  t = {ft[i]*1e3:5.1f} ms  "
+                 f"-  {phase_label(ft[i])}   (f0 = {f0:.0f} Hz)")
     return qm, cur, sup
 
 anim = FuncAnimation(fig, update, frames=len(idx), blit=False)
 out = "plots/helmholtz_resonance.gif"
 anim.save(out, writer=PillowWriter(fps=20))
 
-# --- allegement du GIF (palette reduite) ---
+# --- shrink the GIF with a reduced palette ---
 from PIL import Image, ImageSequence
 im = Image.open(out)
 fr = [f.convert("RGB").quantize(colors=80, method=Image.MEDIANCUT)
       for f in ImageSequence.Iterator(im)]
 fr[0].save(out, save_all=True, append_images=fr[1:], duration=50, loop=0, optimize=True)
-print(f"Anime : {out}  ({len(idx)} frames, f0={f0:.0f} Hz, "
-      f"{os.path.getsize(out)/1e6:.1f} Mo)")
+print(f"Animation: {out}  ({len(idx)} frames, f0={f0:.0f} Hz, "
+      f"{os.path.getsize(out)/1e6:.1f} MB)")

@@ -1,154 +1,214 @@
-# Résonateur de Helmholtz — étude numérique par différences finies
+# Helmholtz resonator — a verified finite-difference study
 
-Étude numérique d'un résonateur de Helmholtz axisymétrique, en deux volets complémentaires :
+A numerical study of an axisymmetric Helmholtz resonator, built around a rule the whole repository
+follows: **no number is reported without the verification that bounds its error.** Two independent
+finite-difference solvers are written, verified against manufactured solutions, converged on
+successive grids, extrapolated to zero mesh size, cross-validated against each other and against
+published measurements — and where they disagree, the disagreement is stated rather than averaged
+away.
 
-| # | Notebook | Question | Résultat vérifié |
+| # | Question | Method | Verified result |
 |---|---|---|---|
-| **1** | `etude_helmholtz.ipynb` | Où est la résonance et de quoi dépend-elle ? | V&V complète : MMS ordre **2,03**, GCI **≈2 %**, validation Selamet **0,6 / 2,2 %** |
-| **2** | `resonance_transitoire.ipynb` | À quoi ressemble la résonance **en temps réel** ? | col ouvert + extérieur maillé → **f₀ = 204,6 Hz** (extrapolée, GCI 1,5 %), à **0,47 %** de la formule corrigée |
+| **1** | Where is the resonance, and what sets it? | harmonic FDM, `etude_helmholtz.ipynb` | full V&V: MMS order **2.03**, GCI **≈ 2 %**, validation against Selamet *et al.* to **0.9 % / 2.2 %** |
+| **2** | What does the resonance look like **in real time**? | transient FDM with an open neck and a meshed exterior, `resonance_transitoire.ipynb` | **f₀ = 204.6 Hz** extrapolated (GCI 1.5 %), within **0.47 %** of the corrected formula |
+| **3** | Does a real bottle agree? | ring-down measurement, `analyze_recording.py` | protocol and analysis chain in place and self-verified; awaiting a recording |
 
-![Résonance de Helmholtz — col ouvert](plots/helmholtz_resonance.gif)
+![Helmholtz resonance — open neck](plots/helmholtz_resonance.gif)
 
-*L'impulsion se propage, entre par le col, la cavité se remplit — puis l'impulsion repart et la
-cavité **sonne seule** à sa fréquence propre. Volet 2.*
+*The pulse propagates, enters through the neck, the cavity fills — then the pulse leaves and the
+cavity **rings on its own** at its natural frequency. Part 2.*
 
-## Démarrage
+## Getting started
 
 ```bash
 pip install -r requirements.txt
-jupyter lab etude_helmholtz.ipynb          # volet 1 — FDM / V&V
-jupyter lab resonance_transitoire.ipynb    # volet 2 — résonance en transitoire
+jupyter lab etude_helmholtz.ipynb          # part 1 — harmonic FDM, V&V
+jupyter lab resonance_transitoire.ipynb    # part 2 — transient resonance
+python analyze_recording.py --self-test    # part 3 — verify the measurement chain
 ```
 
-Les notebooks sont livrés **avec leurs sorties** (figures visibles sans rien exécuter).
+The notebooks ship **with their outputs**, so every figure is visible without running anything.
 
 ---
 
-## Volet 1 — FDM : vérification, validation, longueur effective
+## Part 1 — Harmonic FDM: verification, validation, effective length
 
-| Niveau | Question | Méthode | Résultat |
+The complex pressure obeys the Helmholtz equation in axisymmetric cylindrical coordinates, with
+the singularity at r = 0 removed by L'Hôpital's rule. Verification proceeds on three distinct
+levels, in the order that makes each one meaningful:
+
+| Level | Question | Method | Result |
 |---|---|---|---|
-| **Code** | le schéma est-il bien programmé ? | solution manufacturée (MMS) | ordre **2,03** |
-| **Solution** | l'erreur de maillage est-elle bornée ? | convergence GCI (Roache) + 4ᵉ grille | incertitude **≈ 2 %** |
-| **Modèle** | reproduit-il la réalité ? | mesures publiées (Selamet *et al.* 1997) | écarts **0,6 % / 2,2 %** |
+| **Code** | is the scheme correctly programmed? | manufactured solution (MMS) | order **2.03** |
+| **Solution** | is the mesh error bounded? | GCI convergence (Roache) + a 4th control grid | uncertainty **≈ 2 %** |
+| **Model** | does it reproduce reality? | published measurements (Selamet *et al.*, 1997) | deviations **0.9 % / 2.2 %** |
 
-- **Loi d'échelle** : après propagation de l'incertitude numérique, loi de puissance et modèle à
-  longueur effective sont statistiquement indiscernables (ΔAICc non décisif) ; le modèle physique
-  `f₀ = A_H/√(L+ΔL_eff)` est préféré (**A_H ≈ 48**, **ΔL_eff ≈ 0,66 R_col**, prédiction
-  leave-one-out 10× meilleure). L'exposant apparent *b ≈ −0,42* est un artefact de plage restreinte.
-- **Correction de bout** décomposée intérieur/extérieur via une condition d'impédance de rayonnement.
-- **Pertes** dominées par la couche limite du col (**Q ≈ 47**) ; absorption volumique négligeable.
+- **Scaling law.** Once the numerical uncertainty is propagated, a power law and the
+  effective-length model are statistically indistinguishable (ΔAICc not decisive). The physical
+  model `f₀ = A_H/√(L+ΔL_eff)` is nevertheless preferred: **A_H ≈ 48** matches the theoretical
+  constant, **ΔL_eff ≈ 0.67 R_neck** matches the Rayleigh–Ingard correction, and its
+  leave-one-out prediction is ten times better. The apparent exponent *b ≈ −0.42* is an artefact
+  of the restricted range of neck lengths.
+- **End correction** decomposed into interior and exterior contributions through a radiation
+  impedance condition — as a consistency test of the Robin implementation, not an *ab initio*
+  calculation. Part 2 performs the *ab initio* version.
+- **Losses** dominated by the neck boundary layer (**Q ≈ 47**); bulk absorption negligible.
 
-## Volet 2 — Résonance en régime transitoire (col ouvert, extérieur maillé)
+## Part 2 — Transient resonance, open neck, meshed exterior
 
-Le col est **réellement ouvert** sur un demi-espace extérieur **maillé** (baffle plan, couches
-absorbantes), excité par une **impulsion large bande**. Le résonateur **sélectionne** sa fréquence
-propre : après le passage de l'impulsion, la cavité continue d'osciller.
+The neck is **genuinely open** onto a meshed exterior half-space (flat baffle, absorbing layers)
+and excited by a **broadband pulse**. The resonator **selects** its own frequency: after the pulse
+has passed, the cavity keeps oscillating. The exterior mesh **computes** the end correction
+instead of postulating it — the first perspective of Part 1, now carried out.
 
-| Grandeur | Mesuré | Référence | Écart |
+| Quantity | Measured | Reference | Deviation |
 |---|---|---|---|
-| f₀ **extrapolée à maillage nul** | **204,6 Hz** (GCI 1,5 %) | Helmholtz **avec** corrections de bout : 205,6 Hz | **0,47 %** |
-| — | — | Helmholtz **sans** correction : 241,3 Hz | 15 % |
-| Ordre de convergence observé | 0,86 | 3 grilles : 2 / 1 / 0,5 mm | — |
-| Q par rayonnement | **non mesurable ici** | varie d'un facteur 6 selon les frontières | artefact numérique |
+| f₀ **extrapolated to zero mesh size** | **204.6 Hz** (GCI 1.5 %) | Helmholtz **with** end corrections: 205.6 Hz | **0.47 %** |
+| — | — | Helmholtz **without** correction: 241.3 Hz | 15 % |
+| Observed order of convergence | 0.86 | three grids: 2 / 1 / 0.5 mm | — |
+| Q by radiation | **not measurable here** | varies by a factor of 6 with the boundary treatment | numerical artefact |
 
-Le maillage extérieur **calcule** la correction de bout au lieu de la postuler : c'est la
-**perspective n°1** du projet, désormais réalisée.
+**A verification added afterwards, which corrected two announced results.** The solver places its
+walls half a cell beyond the last node, so the geometry actually simulated is `R+h/2` and `H+h`,
+biasing f₀ at first order. Three consequences:
 
-**Vérification (ajoutée après coup, et elle corrige deux résultats).** Le solveur place ses parois
-une demi-maille au-delà du dernier nœud — la géométrie simulée vaut donc `R+h/2` et `H+h`, ce qui
-biaise f₀ au premier ordre. Trois conséquences :
+- the raw frequency at h = 1 mm (209.8 Hz) appeared to coincide with the harmonic impedance
+  calculation (209.84 Hz); that coincidence was **fortuitous**, an artefact of the mesh bias;
+- once extrapolated, f₀ = **204.6 Hz**, within 0.47 % of the corrected theory — weaker agreement
+  on its face, but this time **controlled** and carrying an uncertainty;
+- f₀ is **perfectly robust** to the boundary treatment (0.00 % variation), whereas **Q varies by a
+  factor of 6**: this calculation measures a natural frequency, not a damping.
 
-- la fréquence brute à h=1 mm (209,8 Hz) semblait coïncider avec le calcul fréquentiel par
-  impédance (209,84 Hz) ; cette coïncidence était **fortuite**, due au biais de maillage ;
-- une fois extrapolée, f₀ = **204,6 Hz**, à 0,47 % de la théorie corrigée — un accord plus faible
-  en apparence, mais cette fois **contrôlé** et assorti d'une incertitude ;
-- f₀ est **parfaitement robuste** au traitement des frontières (variation 0,00 %), alors que **Q
-  varie d'un facteur 6** : ce calcul mesure une fréquence propre, pas un amortissement.
+Code verification: `mms_transient.py` (space-time manufactured solution, **order 1.98**), which
+exercises the mask, the zero fluxes and the axis — none of which the Part 1 MMS covered.
 
-Vérification de code : `mms_transient.py` (solution manufacturée espace-temps, **ordre 1,98**),
-qui teste le masque, les flux nuls et l'axe — ce que la MMS du volet 1 ne couvrait pas.
+### Full frequency sweep — `fdm_sweep.py`
 
-### Balayage fréquentiel complet — `fdm_sweep.py`
+A thousand harmonic solves from **1 to 1000 Hz in 77 seconds**, with a radiation impedance at the
+mouth. Compare with the 7 to 17 hours an equivalent transient sweep would have cost: 10 s of
+signal at `dt_CFL = 0.825 µs` is **1.21 × 10⁷ time steps**.
 
-Mille résolutions harmoniques de **1 à 1000 Hz en 77 secondes**, avec condition d'impédance de
-rayonnement à la bouche. À comparer aux 7 à 17 heures qu'aurait coûté un balayage transitoire
-équivalent : 10 s de signal à `dt_CFL = 0,825 µs`, soit **1,21 × 10⁷ pas de temps**.
-
-| Grandeur | Pas de 1 Hz | Pas de 0,005 Hz |
+| Quantity | 1 Hz step | 0.005 Hz step |
 |---|---|---|
-| Pic de résonance | 209,95 Hz | **209,84 Hz** |
-| Amplitude au pic | 6 622 Pa | **7 251 Pa** |
-| Bande à −3 dB | 0,96 Hz | 0,73 Hz |
-| Facteur de qualité Q | 218,6 | 285,6 |
-| Gain par rapport à 1 Hz | **255×** | — |
+| Resonance peak | 209.95 Hz | **209.84 Hz** |
+| Amplitude at the peak | 6 622 Pa | **7 251 Pa** |
+| −3 dB bandwidth | 0.96 Hz | 0.73 Hz |
+| Quality factor Q | 218.6 | 285.6 |
+| Gain over the 1 Hz sweep | **255×** | — |
 
-> **Le premier passage sous-estimait le pic de 9 %.** La bande à −3 dB fait 0,73 Hz, soit
-> **moins que le pas d'échantillonnage de 1 Hz** : le pic n'était tout simplement pas résolu.
+> **The first pass underestimated the peak by 9 %.** The −3 dB bandwidth is 0.73 Hz, **narrower
+> than the 1 Hz sampling step**: the peak was simply not resolved.
 
-![Balayage fréquentiel](plots/fdm_sweep.png)
+![Frequency sweep](plots/fdm_sweep.png)
 
-### Validation croisée des deux solveurs
+### Cross-validation of the two solvers
 
-Les deux solveurs ont été extrapolés à maillage nul par la méthode de Richardson.
+Both solvers were extrapolated to zero mesh size by Richardson's method.
 
-| Grandeur | Solveur fréquentiel | Solveur transitoire |
+| Quantity | Harmonic solver | Transient solver |
 |---|---|---|
-| Ordre observé | **0,933** | **0,863** |
-| f₀ extrapolée | **203,35 Hz** | **204,60 Hz** |
-| GCI | 2,05 % | 1,54 % |
-| Intervalle | 199,2 – 207,5 Hz | 201,4 – 207,8 Hz |
+| Observed order | **0.933** | **0.863** |
+| Extrapolated f₀ | **203.35 Hz** | **204.60 Hz** |
+| GCI | 2.05 % | 1.54 % |
+| Interval | 199.2 – 207.5 Hz | 201.4 – 207.8 Hz |
 
-Les deux extrapolations diffèrent de **0,61 %**, largement à l'intérieur des barres
-d'incertitude, et la **théorie de Helmholtz corrigée (205,56 Hz) tombe dans les deux
-intervalles**. Deux solveurs indépendants, deux modèles de rayonnement différents, même réponse :
-validation croisée **contrôlée**, et non fortuite.
+The two extrapolations differ by **0.61 %**, comfortably inside the uncertainty bars, and the
+**corrected Helmholtz theory (205.56 Hz) falls inside both intervals**. Two independent solvers,
+two different radiation models, one answer: a **controlled** cross-validation rather than a
+fortunate one.
 
-Les deux ordres observés valent ~0,9 et non 2 : le biais de demi-maille est présent dans les
-**deux** solveurs. En revanche **Q diverge d'un facteur 2,7** selon le modèle de rayonnement —
-285,6 par impédance analytique contre 105 par extérieur maillé. Ce projet mesure très bien une
-fréquence propre, et mal un amortissement.
+Both observed orders are near 0.9 rather than 2, because the half-cell bias is present in **both**
+solvers. **Q, by contrast, differs by a factor of 2.7** between the radiation models — 285.6 from
+the analytic impedance against 105 from the meshed exterior. This project measures a natural
+frequency very well, and a damping badly.
 
-### Animation du mode établi — `make_mode_anim.py`
+### Animation of the established mode — `make_mode_anim.py`
 
-![Mode résonant](plots/helmholtz_mode.gif)
+![Resonant mode](plots/helmholtz_mode.gif)
 
-*Quadrature mesurée à **+90,2°** entre la vitesse au col et la pression en cavité — signature du
-système masse-ressort : le bouchon d'air du col est la masse, l'air de la cavité le ressort.*
+*Quadrature measured at **+90.2°** between the neck velocity and the cavity pressure — the
+signature of a mass-spring system: the plug of air in the neck is the mass, the air in the cavity
+is the spring.*
 
+## Part 3 — Closing the loop: measuring a real resonator
 
-## Reproduire
+Everything above is computation. The one quantity the computation does not settle is the damping,
+and the disagreement is not small: Q ≈ 286 from the analytic radiation impedance, anywhere from 44
+to 267 from the meshed exterior depending on how the outer boundary is treated, against an
+estimated Q ≈ 47 from viscothermal losses in the neck, which should dominate a real object.
+
+[`docs/EXPERIMENTAL_PROTOCOL.md`](docs/EXPERIMENTAL_PROTOCOL.md) sets out a measurement that needs
+a bottle, a phone and an afternoon, and [`analyze_recording.py`](analyze_recording.py) performs the
+analysis: FFT with parabolic peak interpolation for f₀, then a band-pass, a Hilbert envelope and a
+logarithmic decrement for Q — **the same estimator the transient solver uses**, so the measured and
+computed values are directly comparable rather than merely similar.
+
+The analysis chain is verified before any bottle is recorded:
 
 ```bash
-python fdm_open_resonator.py          # volet 2 : résonance transitoire (~6 min)
-python fdm_sweep.py                   # balayage fréquentiel 1-1000 Hz (77 s)
-python mms_transient.py               # vérification de code du transitoire (~10 s)
-python convergence_f0.py              # convergence en maillage de f0
-python make_resonance_anim.py         # animation (après un run OR_TAG=_anim, cf. notebook)
-python make_mode_anim.py              # animation du mode résonant établi (~30 s)
-
+python analyze_recording.py --self-test
 ```
 
-## Contenu
+| Self-test | What it checks | Result |
+|---|---|---|
+| Part 1 | recovery of f₀ and Q from synthetic ring-downs of known parameters, 128–480 Hz, 25–45 dB SNR | f₀ to **0.007 %**, Q to **4.4 %** worst case |
+| Part 2 | the lumped predictions against this project's own reference geometry | f₀ to **0.06 %** of the corrected formula, Q_rad to **2.5 %** of the harmonic sweep |
+
+![Self-test of the ring-down estimator](plots/experiment_selftest.png)
+
+*The self-test on a synthetic decay: the analysis window on the waveform, the spectrum, and the
+log-envelope with its fit. Same three panels a real recording will produce.*
+
+That second check is worth stating plainly: a lumped radiation resistance computed from the
+geometry alone lands within 2.5 % of the 285.6 obtained by meshing the mouth and sweeping a
+thousand frequencies. The two routes are independent.
+
+## Reproducing
+
+```bash
+python fdm_open_resonator.py          # part 2: transient resonance (~6 min)
+python fdm_sweep.py                   # frequency sweep, 1–1000 Hz (77 s)
+python mms_transient.py               # code verification of the transient scheme (~10 s)
+python convergence_f0.py              # mesh convergence and extrapolation of f0
+python make_resonance_anim.py         # animation (after a run with OR_TAG=_anim, see the notebook)
+python make_mode_anim.py              # animation of the established resonant mode (~30 s)
+python analyze_recording.py --self-test   # part 3: verify the measurement chain
+python make_paper_figures.py          # redraw the figures of the PDF from data/
+```
+
+## Contents
 
 ```
-etude_helmholtz.ipynb          volet 1 — FDM fréquentiel, V&V, longueur effective
-resonance_transitoire.ipynb    volet 2 — résonance transitoire (col ouvert)
-fdm_open_resonator.py          solveur transitoire col ouvert + extérieur maillé
-mms_transient.py               vérification de code du transitoire (MMS espace-temps)
-convergence_f0.py              convergence en maillage de f0 + extrapolation
-make_resonance_anim.py         animation du régime transitoire
-make_mode_anim.py              animation du mode résonant établi (quadrature col/cavité)
-build_resonance_notebook.py    génération du notebook du volet 2
-explication_scientifique.pdf   article du volet 1
-docs/PROTOCOLE_EXPERIMENTAL.md protocole de mesure sur résonateur réel
-data/  plots/                  données et figures
-docs/PROTOCOLE_EXPERIMENTAL.md protocole de mesure sur résonateur réel
+etude_helmholtz.ipynb            part 1 — harmonic FDM, V&V, effective length
+resonance_transitoire.ipynb      part 2 — transient resonance (open neck)
+fdm_open_resonator.py            transient solver, open neck + meshed exterior
+fdm_sweep.py                     full frequency sweep with a radiation impedance
+mms_transient.py                 code verification of the transient scheme (space-time MMS)
+convergence_f0.py                mesh convergence of f0 + Richardson extrapolation
+analyze_recording.py             part 3 — ring-down analysis of a real resonator
+make_paper_figures.py            redraws the figures of the PDF from data/
+make_resonance_anim.py           animation of the transient regime
+make_mode_anim.py                animation of the established resonant mode
+build_resonance_notebook.py      generator for the part 2 notebook
+explication_scientifique.pdf     write-up of part 1
+docs/EXPERIMENTAL_PROTOCOL.md    measurement protocol for a real resonator
+data/  plots/                    data and figures
 ```
 
-## Perspectives
+## What this study does and does not establish
 
-PML formelle au lieu des couches absorbantes ; pertes viscothermiques résolues
-dans le transitoire ; col émergeant sans baffle ; campagne expérimentale (cf. `docs/`).
-Le facteur de qualité reste non tranché — 285,6 par impédance analytique contre 105 par
-extérieur maillé : ce projet mesure très bien une fréquence propre, et mal un amortissement.
+**Established, with an error bar.** The natural frequency: two independent solvers, three levels of
+verification, agreement with published measurements without a single fitted parameter, and a
+theory that falls inside both uncertainty intervals.
+
+**Not established.** The damping. Neither solver converges on Q, and the repository says so instead
+of quoting a number. The exterior treatment — absorbing layers rather than a formal PML — is the
+reason, and a formal PML with its own convergence study is the numerical fix. The experimental
+route in Part 3 is the cheaper one, and it is the one that decides which of the computed values,
+if any, describes a real object.
+
+## References
+
+Helmholtz (1860) · Rayleigh (1896) · Crandall (1926) · Ingard (1953) · Morse & Ingard (1968) ·
+Bérenger (1994) · Roache (1994, 1998) · Selamet *et al.* (1997) · Peters *et al.* (2003) ·
+Moloney (2004). Full entries in [`references.bib`](references.bib).

@@ -1,24 +1,24 @@
 """
-Convergence en maillage de la frequence propre f0 (resonateur a col ouvert).
+Mesh convergence of the natural frequency f0 (open-neck resonator).
 
-Deux ameliorations sur la mesure brute par FFT :
+Two improvements over the raw FFT measurement:
 
-1. ESTIMATEUR PRECIS. La FFT est limitee par sa resolution (4,9 Hz sur 250 ms),
-   trop grossiere pour mesurer une derive de maillage de quelques Hz. On ajuste
-   donc directement une sinusoide amortie sur le regime libre :
+1. A PRECISE ESTIMATOR. The FFT is limited by its resolution (4.9 Hz over
+   250 ms), far too coarse to resolve a mesh drift of a few Hz. A damped
+   sinusoid is therefore fitted directly to the free decay,
 
         p(t) = A * exp(-t/theta) * cos(2*pi*f0*t + phi)
 
-   ce qui donne f0 bien en dessous de la largeur d'un canal FFT.
+   which locates f0 well below the width of one FFT bin.
 
-2. EXTRAPOLATION. Le solveur place ses parois une DEMI-MAILLE au-dela du
-   dernier noeud (cf. mms_transient.py) : la geometrie effective depend de h,
-   ce qui produit un biais du PREMIER ordre sur f0. On mesure l'ordre observe
-   sur trois grilles et on extrapole a maillage nul (Richardson).
+2. EXTRAPOLATION. The solver places its walls HALF A CELL beyond the last node
+   (see mms_transient.py), so the effective geometry depends on h and biases f0
+   at FIRST order. The observed order is measured on three grids and the result
+   extrapolated to zero mesh size (Richardson).
 
-Entrees : data/open_resonator_h2.npz (2 mm), data/open_resonator.npz (1 mm),
-          data/open_resonator_h05.npz (0,5 mm)
-Sortie  : data/convergence_f0.npz, plots/convergence_f0.png
+Inputs : data/open_resonator_h2.npz (2 mm), data/open_resonator.npz (1 mm),
+         data/open_resonator_h05.npz (0.5 mm)
+Output : data/convergence_f0.npz, plots/convergence_f0.png
 """
 import os
 import numpy as np
@@ -30,15 +30,15 @@ HERE = os.path.dirname(os.path.abspath(__file__)); os.chdir(HERE)
 
 C = 343.0
 R_NECK, R_CAV, L_NECK, H_CAV = 0.01, 0.04, 0.04, 0.08
-T_FREE = 0.045          # debut du regime libre
+T_FREE = 0.045          # start of the free decay
 
 
 def fit_f0(t, p):
-    """Ajuste A*exp(-t/theta)*cos(2*pi*f*t+phi) sur le regime libre."""
+    """Fit A*exp(-t/theta)*cos(2*pi*f*t+phi) to the free decay."""
     m = t >= T_FREE
     tt = t[m] - t[m][0]
     pp = p[m]
-    # amorce : FFT pour f0, decroissance grossiere pour theta
+    # initial guess: FFT for f0, a crude decay estimate for theta
     sp = np.abs(np.fft.rfft(pp*np.hanning(pp.size)))
     fr = np.fft.rfftfreq(pp.size, tt[1]-tt[0])
     band = (fr > 60) & (fr < 900)
@@ -75,70 +75,70 @@ CASES = [(2.0e-3, "data/open_resonator_h2.npz"),
          (0.5e-3, "data/open_resonator_h05.npz")]
 
 hs, f0s, Qs = [], [], []
-print("=== MESURE PRECISE PAR AJUSTEMENT DE SINUSOIDE AMORTIE ===\n")
+print("=== PRECISE MEASUREMENT BY DAMPED-SINUSOID FIT ===\n")
 for h, path in CASES:
     if not os.path.exists(path):
-        print(f"h = {h*1e3:.2f} mm : {path} absent — ignore")
+        print(f"h = {h*1e3:.2f} mm : {path} missing - skipped")
         continue
     d = np.load(path)
     f0, Q, res = fit_f0(d["t"], d["p_cav"])
     f_fft = float(d["f0_meas"])
     hs.append(h); f0s.append(f0); Qs.append(Q)
     print(f"h = {h*1e3:5.2f} mm | f0(FFT) = {f_fft:7.2f} Hz | "
-          f"f0(ajust.) = {f0:8.3f} Hz | Q = {Q:7.1f} | residu {res*100:.2f} %")
+          f"f0(fit) = {f0:8.3f} Hz | Q = {Q:7.1f} | residual {res*100:.2f} %")
 
 hs = np.array(hs); f0s = np.array(f0s)
 
-# --- geometrie effective : parois a une demi-maille au-dela ---
+# --- effective geometry: walls half a cell beyond the last node ---
 def f_helm(Rn, Rc, Hc, Leff):
     S = np.pi*Rn**2; V = np.pi*Rc**2*Hc
     return C/(2*np.pi)*np.sqrt(S/(V*Leff))
 
-print("\n=== BIAIS GEOMETRIQUE DE DEMI-MAILLE (prediction) ===")
-print("le solveur simule R + h/2 et H + h, pas les cotes nominales")
+print("\n=== HALF-CELL GEOMETRIC BIAS (prediction) ===")
+print("the solver simulates R + h/2 and H + h, not the nominal dimensions")
 for h in hs:
     fn = f_helm(R_NECK, R_CAV, H_CAV, L_NECK + 1.29*R_NECK)
     fe = f_helm(R_NECK + h/2, R_CAV + h/2, H_CAV + h, L_NECK + 1.29*R_NECK)
-    print(f"  h = {h*1e3:5.2f} mm : ecart predit sur f0 = {(fe/fn - 1)*100:+5.2f} %")
+    print(f"  h = {h*1e3:5.2f} mm : predicted shift in f0 = {(fe/fn - 1)*100:+5.2f} %")
 
 if len(hs) >= 3:
-    f3, f2, f1 = f0s[0], f0s[1], f0s[2]        # grossier, moyen, fin
+    f3, f2, f1 = f0s[0], f0s[1], f0s[2]        # coarse, medium, fine
     p = np.log(abs((f3 - f2)/(f2 - f1)))/np.log(2.0)
     f_ext = f1 + (f1 - f2)/(2**p - 1)
     gci = 1.25*abs((f2 - f1)/f1)/(2**p - 1)
-    print(f"\n=== EXTRAPOLATION (3 grilles) ===")
-    print(f"  ordre observe p      = {p:.3f}")
-    print(f"  f0 extrapolee        = {f_ext:.2f} Hz")
-    print(f"  incertitude GCI      = {gci*100:.2f} %")
+    print(f"\n=== EXTRAPOLATION (3 grids) ===")
+    print(f"  observed order p     = {p:.3f}")
+    print(f"  extrapolated f0      = {f_ext:.2f} Hz")
+    print(f"  GCI uncertainty      = {gci*100:.2f} %")
 elif len(hs) == 2:
     f2, f1 = f0s[0], f0s[1]
-    f_ext = f1 + (f1 - f2)          # ordre 1 suppose (biais geometrique)
+    f_ext = f1 + (f1 - f2)          # order 1 assumed (geometric bias)
     p, gci = 1.0, abs((f1-f2)/f1)
-    print(f"\n=== EXTRAPOLATION (2 grilles, ordre 1 SUPPOSE) ===")
-    print(f"  f0 extrapolee        = {f_ext:.2f} Hz   (ordre non verifie)")
+    print(f"\n=== EXTRAPOLATION (2 grids, order 1 ASSUMED) ===")
+    print(f"  extrapolated f0      = {f_ext:.2f} Hz   (order not verified)")
 else:
     f_ext, p, gci = np.nan, np.nan, np.nan
 
 f_theo = f_helm(R_NECK, R_CAV, H_CAV, L_NECK + 0.85*R_NECK + 0.66*R_NECK)
-print(f"\n=== COMPARAISON ===")
-print(f"  Helmholtz + corrections de bout : {f_theo:.2f} Hz")
+print(f"\n=== COMPARISON ===")
+print(f"  Helmholtz + end corrections     : {f_theo:.2f} Hz")
 if np.isfinite(f_ext):
-    print(f"  f0 extrapolee (ce calcul)       : {f_ext:.2f} Hz   -> ecart {abs(f_ext-f_theo)/f_theo*100:.2f} %")
-print(f"  volet frequentiel (impedance)   : 209.84 Hz")
+    print(f"  extrapolated f0 (this run)      : {f_ext:.2f} Hz   -> deviation {abs(f_ext-f_theo)/f_theo*100:.2f} %")
+print(f"  harmonic solver (impedance)     : 209.84 Hz")
 
 np.savez("data/convergence_f0.npz", h=hs, f0=f0s, Q=np.array(Qs),
          f_ext=f_ext, order=p, gci=gci, f_theo=f_theo)
 
 if len(hs) >= 2:
     fig, ax = plt.subplots(figsize=(6.6, 4.4))
-    ax.plot(hs*1e3, f0s, "o-", color="#1d5480", label="f0 mesuree (ajustement)")
+    ax.plot(hs*1e3, f0s, "o-", color="#1d5480", label="f0 measured (damped-sinusoid fit)")
     if np.isfinite(f_ext):
         ax.axhline(f_ext, ls="--", color="#1d5480", lw=1,
-                   label=f"extrapolee h=0 : {f_ext:.1f} Hz")
+                   label=f"extrapolated to h=0: {f_ext:.1f} Hz")
     ax.axhline(f_theo, ls=":", color="#a8442a", lw=1.4,
-               label=f"Helmholtz corrigee : {f_theo:.1f} Hz")
-    ax.set_xlabel("pas de maillage h (mm)"); ax.set_ylabel("f0 (Hz)")
-    ax.set_title("Convergence en maillage de la frequence propre")
+               label=f"corrected Helmholtz: {f_theo:.1f} Hz")
+    ax.set_xlabel("mesh step h (mm)"); ax.set_ylabel("f0 (Hz)")
+    ax.set_title("Mesh convergence of the natural frequency")
     ax.grid(ls=":"); ax.legend(fontsize=8)
     fig.tight_layout(); fig.savefig("plots/convergence_f0.png", dpi=110)
-    print("\nFigure : plots/convergence_f0.png")
+    print("\nFigure: plots/convergence_f0.png")

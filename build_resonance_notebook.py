@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Construit resonance_transitoire.ipynb (FDM col ouvert + exterieur maille)."""
+"""Build resonance_transitoire.ipynb (open-neck FDM with a meshed exterior)."""
 import nbformat as nbf
 from nbformat.v4 import new_notebook, new_markdown_cell, new_code_cell
 
@@ -7,42 +7,41 @@ cells = []
 def md(s): cells.append(new_markdown_cell(s))
 def co(s): cells.append(new_code_cell(s))
 
-md(r"""# Résonance de Helmholtz en régime transitoire — col ouvert et domaine extérieur maillé
+md(r"""# Helmholtz resonance in the transient regime -- open neck, meshed exterior
 
-**Résumé.** On simule le résonateur avec son **col réellement ouvert** sur un demi-espace
-extérieur **maillé** (baffle plan), excité par une **impulsion large bande**. On observe la
-séquence complète : l'onde se propage, entre par le col, la cavité se remplit — puis, une fois
-l'impulsion partie, **la cavité continue de sonner à sa fréquence propre**. C'est la résonance
-de Helmholtz, obtenue sans rien imposer de la fréquence.
+**Summary.** The resonator is simulated with its neck **genuinely open** onto a **meshed**
+exterior half-space (flat baffle), and excited by a **broadband pulse**. The full sequence is
+observed: the wave propagates, enters through the neck, the cavity fills -- and then, once the
+pulse has gone, **the cavity keeps ringing at its own natural frequency**. This is Helmholtz
+resonance, obtained without imposing any frequency.
 
-Deux résultats vérifiables en sortent :
+Two verifiable results come out of it:
 
-| Grandeur | Valeur mesurée | Référence | Écart |
+| Quantity | Measured | Reference | Deviation |
 |---|---|---|---|
-| $f_0$ (FFT du régime libre) | **209,8 Hz** | Helmholtz + corrections de bout : 205,6 Hz | **2,0 %** |
-| $Q_{\text{ray}}$ (décroissance) | **≈ 105** | rayonnement seul (pas de pertes visqueuses ici) | — |
+| $f_0$, extrapolated to zero mesh size | **204.6 Hz** (GCI 1.5 %) | Helmholtz with end corrections: 205.6 Hz | **0.47 %** |
+| $Q$ from the envelope decay | **not measurable here** | varies by a factor of 6 with the boundary treatment | numerical artefact |
 
-> Ce notebook réalise la **perspective n°1** annoncée dans le README du projet : *« domaine
-> extérieur maillé (Sommerfeld / PML) pour un calcul ab initio du rayonnement »*. La correction
-> de bout extérieure n'est plus **postulée** — elle est **calculée** par le maillage.
+> This notebook carries out the **first perspective** announced in the project README: a *meshed
+> exterior domain for an ab initio account of radiation*. The exterior end correction is no
+> longer **postulated** -- it is **computed** by the mesh.
 """)
 
-md(r"""## 1. Pourquoi ce notebook existe : boîte fermée ≠ résonateur
+md(r"""## 1. Why the neck has to be open: a sealed box is not a resonator
 
-Le notebook `pinn_3d_transient.ipynb` traite une configuration où **toutes les parois sont
-rigides**, y compris l'entrée du col : c'est une **boîte scellée**. Une boîte scellée n'a **pas**
-de résonance de Helmholtz — son premier mode acoustique est vers 1400 Hz, au-dessus du balayage
-50–800 Hz. La réponse y est *contrôlée par la raideur* et se réduit à une **rampe de pression**
-(le mode uniforme, $\frac{d^2}{dt^2}\langle p\rangle=\langle F\rangle$).
+If every wall is rigid, the neck entrance included, the geometry is a **sealed box**. A sealed box
+has **no** Helmholtz resonance: its first acoustic mode sits near 1400 Hz, well above the band of
+interest. Its response is **stiffness-controlled** and reduces to a **pressure ramp** -- the
+uniform mode, $\frac{d^2}{dt^2}\langle p\rangle=\langle F\rangle$.
 
-La résonance de Helmholtz exige un **col ouvert** : le bouchon d'air du col (masse) oscille
-contre l'air de la cavité (ressort). C'est ce qu'on met en place ici.
+Helmholtz resonance requires an **open neck**: the plug of air in the neck (the mass) oscillates
+against the air in the cavity (the spring). That is what is set up here.
 
-| | `pinn_3d_transient.ipynb` | **ce notebook** |
+| | sealed box | **this notebook** |
 |---|---|---|
-| Col | fermé (paroi rigide) | **ouvert** sur l'extérieur maillé |
-| Physique | mode uniforme → **rampe** | **résonance** masse–ressort |
-| Réponse | monotone, ~5 Pa | oscillation entretenue à $f_0$ |
+| Neck | closed (rigid wall) | **open** onto a meshed exterior |
+| Physics | uniform mode, a **ramp** | mass-spring **resonance** |
+| Response | monotonic, a few Pa | sustained oscillation at $f_0$ |
 """)
 
 co(r"""%matplotlib inline
@@ -55,33 +54,36 @@ r, z, dom = d['r'], d['z'], d['dom']
 t, p_cav, p_out, p_neck = d['t'], d['p_cav'], d['p_out'], d['p_neck']
 freqs, spec = d['freqs'], d['spec']
 f0, f0_noc, f0_cor, Q = float(d['f0_meas']), float(d['f0_noc']), float(d['f0_cor']), float(d['Q_meas'])
-snaps, snap_t = d['snaps'], d['snap_t']
+# the solver has used both names for the stored field snapshots
+snaps = d['snaps'] if 'snaps' in d.files else d['frames']
+snap_t = d['snap_t'] if 'snap_t' in d.files else d['frame_t']
 
 R_NECK, R_CAV, L_NECK, H_CAV, C = 0.01, 0.04, 0.04, 0.08, 343.0
-print(f"domaine : {dom.sum()} cellules actives, h = {float(d['H'])*1e3:.1f} mm, "
+print(f"domain: {dom.sum()} active cells, h = {float(d['H'])*1e3:.1f} mm, "
       f"dt = {float(d['dt'])*1e6:.2f} us, T = {float(d['T_MAX'])*1e3:.0f} ms")
-print(f"longueur d'onde a f0 : {C/f0*100:.0f} cm  (resonateur : 12 cm)  -> regime SOUS-longueur d'onde")
+print(f"wavelength at f0: {C/f0*100:.0f} cm  (resonator: 12 cm)  -> deeply SUB-WAVELENGTH")
 """)
 
 md(r"""## 2. Configuration
 
-Géométrie axisymétrique $(r,z)$ : cavité ($r\le4$ cm, $4\le z\le12$ cm) + col ($r\le1$ cm,
-$0\le z\le4$ cm), **bouche ouverte en $z=0$**, **baffle rigide** en $z=0$ pour $r>R_{\text{col}}$,
-et un **extérieur maillé** $-10\le z\le0$ cm terminé par des **couches absorbantes** (sponge).
+Axisymmetric geometry $(r,z)$: a cavity ($r\le4$ cm, $4\le z\le12$ cm) on a neck ($r\le1$ cm,
+$0\le z\le4$ cm), with an **open mouth at $z=0$**, a **rigid baffle** at $z=0$ for
+$r>R_{\text{neck}}$, and a **meshed exterior** $-10\le z\le0$ cm terminated by **absorbing
+layers**.
 
-Schéma : leapfrog explicite, Laplacien axisymétrique en volumes finis masqués (flux nul vers une
-cellule hors-domaine ⇒ Neumann exact, y compris le baffle et le décrochement col/cavité).
-Excitation : **impulsion de Ricker** (large bande, centrée 250 Hz) émise par une petite source
-placée dans l'extérieur — *aucune fréquence n'est imposée au résonateur*.
+Scheme: explicit leapfrog in time; axisymmetric Laplacian in masked finite volumes, where zero
+flux towards an out-of-domain cell gives an exact Neumann condition -- the baffle and the
+neck/cavity step included. Excitation: a **Ricker pulse**, broadband and centred at 250 Hz,
+emitted by a small source placed in the exterior. *No frequency is imposed on the resonator.*
 
-*(Code complet : `fdm_open_resonator.py`.)*
+*(Full code: `fdm_open_resonator.py`.)*
 """)
 
-co(r"""# Instantanes du champ : propagation, entree par le col, mise en resonance
+co(r"""# Field snapshots: propagation, entry through the neck, build-up of the resonance
 sel = [1, 3, 5, 8]
 fig, ax = plt.subplots(1, len(sel), figsize=(15, 3.4))
-vmax = 1.1*np.abs(p_cav).max()/np.abs(p_out).max()   # echelle relative (systeme lineaire)
-K = 1.0/np.abs(p_out).max()
+K = 1.0/np.abs(p_out).max()                          # incident peak -> 1 Pa (linear system)
+vmax = 1.1*np.abs(p_cav).max()*K
 for a, k in zip(ax, sel):
     a.pcolormesh(z*1e3, r*1e3, np.where(dom, snaps[k]*K, np.nan), cmap='RdBu_r',
                  vmin=-vmax, vmax=vmax, shading='auto')
@@ -89,169 +91,186 @@ for a, k in zip(ax, sel):
     a.set(xlabel='z (mm)', title=f't = {snap_t[k]*1e3:.0f} ms')
     a.set_aspect('equal')
 ax[0].set_ylabel('r (mm)')
-fig.suptitle("Champ de pression (demi-plan) — extérieur à gauche, résonateur à droite", y=1.04)
+fig.suptitle("Pressure field (half-plane) - exterior on the left, resonator on the right", y=1.04)
 fig.tight_layout(); plt.show()
 """)
 
-md(r"""## 3. La cavité sonne — et à *sa* fréquence
+md(r"""## 3. The cavity rings -- and at *its own* frequency
 
-L'impulsion incidente est brève et large bande. Après son passage, le résonateur oscille encore :
-il a **sélectionné** une seule fréquence. C'est la signature d'une résonance (et non d'une
-réponse forcée).
+The incident pulse is short and broadband. After it has passed, the resonator is still
+oscillating: it has **selected** a single frequency. That is the signature of a resonance, as
+opposed to a forced response.
 """)
 
-co(r"""K = 1.0/np.abs(p_out).max()          # normalisation : pic incident = 1 Pa (systeme lineaire)
+co(r"""K = 1.0/np.abs(p_out).max()          # normalisation: incident peak = 1 Pa (linear system)
 fig, ax = plt.subplots(1, 3, figsize=(15, 4))
-ax[0].plot(t*1e3, p_out*K, color='0.6', lw=0.7, label='extérieur (incident)')
-ax[0].plot(t*1e3, p_cav*K, 'C0', lw=0.8, label='cavité')
-ax[0].set(xlabel='t (ms)', ylabel='p (Pa)', title="L'impulsion passe, la cavité sonne")
+ax[0].plot(t*1e3, p_out*K, color='0.6', lw=0.7, label='exterior (incident)')
+ax[0].plot(t*1e3, p_cav*K, 'C0', lw=0.8, label='cavity')
+ax[0].set(xlabel='t (ms)', ylabel='p (Pa)', title='The pulse passes, the cavity rings')
 ax[0].legend(fontsize=8); ax[0].grid(alpha=0.3)
 
 band = (freqs > 60) & (freqs < 900)
 ax[1].plot(freqs[band], spec[band]/spec[band].max(), 'C0')
-ax[1].axvline(f0, color='C3', ls='--', label=f'$f_0$ mesurée = {f0:.0f} Hz')
-ax[1].axvline(f0_cor, color='C2', ls=':', label=f'Helmholtz corrigée = {f0_cor:.0f} Hz')
-ax[1].axvline(f0_noc, color='C1', ls=':', label=f'sans correction = {f0_noc:.0f} Hz')
-ax[1].set(xlabel='f (Hz)', ylabel='|P| normalisé', title='Spectre du régime libre (cavité)')
+ax[1].axvline(f0, color='C3', ls='--', label=f'$f_0$ measured = {f0:.0f} Hz')
+ax[1].axvline(f0_cor, color='C2', ls=':', label=f'corrected Helmholtz = {f0_cor:.0f} Hz')
+ax[1].axvline(f0_noc, color='C1', ls=':', label=f'uncorrected = {f0_noc:.0f} Hz')
+ax[1].set(xlabel='f (Hz)', ylabel='normalised |P|', title='Spectrum of the free decay (cavity)')
 ax[1].legend(fontsize=8); ax[1].grid(alpha=0.3)
 
 k = max(3, int(6e-3/float(d['dt']))); n = len(p_cav)//k
 te = np.array([t[i*k:(i+1)*k].mean() for i in range(n)])
 ee = np.array([np.abs(p_cav[i*k:(i+1)*k]).max()*K for i in range(n)])
 ax[2].semilogy(te*1e3, ee, 'o-', ms=3)
-ax[2].set(xlabel='t (ms)', ylabel='enveloppe |p| (Pa)',
-          title=f'Décroissance exponentielle → $Q_{{ray}}$ ≈ {Q:.0f}')
+ax[2].set(xlabel='t (ms)', ylabel='envelope |p| (Pa)',
+          title=f'Exponential decay $\\rightarrow$ $Q$ $\\approx$ {Q:.0f}')
 ax[2].grid(alpha=0.3)
 fig.tight_layout(); plt.show()
 """)
 
 md(r"""### Animation
 
-![Résonance de Helmholtz — col ouvert](plots/helmholtz_resonance.gif)
+![Helmholtz resonance - open neck](plots/helmholtz_resonance.gif)
 
-*Reproduire l'animation :*
+*To reproduce the animation:*
 ```bash
 OR_TMS=120 OR_NFRAMES=420 OR_TAG=_anim python fdm_open_resonator.py
 python make_resonance_anim.py
 ```
 """)
 
-md(r"""## 4. Vérification quantitative
+md(r"""## 4. Quantitative verification
 
-La fréquence de Helmholtz vaut $f_0=\frac{c}{2\pi}\sqrt{\dfrac{S}{V\,L_{\text{eff}}}}$ avec
-$S=\pi R_{\text{col}}^2$, $V=\pi R_{\text{cav}}^2 H_{\text{cav}}$ et $L_{\text{eff}}$ la longueur
-**effective** du col — la longueur géométrique **plus les corrections de bout** (l'air déborde de
-part et d'autre du col et participe à la masse oscillante).
+The Helmholtz frequency is $f_0=\frac{c}{2\pi}\sqrt{\dfrac{S}{V\,L_{\text{eff}}}}$, with
+$S=\pi R_{\text{neck}}^2$, $V=\pi R_{\text{cav}}^2 H_{\text{cav}}$ and $L_{\text{eff}}$ the
+**effective** length of the neck -- its geometric length **plus the end corrections**, since air
+spills out at both ends of the neck and takes part in the oscillating mass.
 """)
 
 co(r"""S = np.pi*R_NECK**2; V = np.pi*R_CAV**2*H_CAV
 f_helm = lambda Leff: C/(2*np.pi)*np.sqrt(S/(V*Leff))
-Leff_ident = S*C**2/(V*(2*np.pi*f0)**2)          # longueur effective DEDUITE de la simulation
+identify = lambda f: S*C**2/(V*(2*np.pi*f)**2)   # effective length INFERRED from a frequency
 
-print(f"f0 mesuree (simulation, col ouvert)     : {f0:7.1f} Hz")
-print(f"Helmholtz sans correction de bout       : {f0_noc:7.1f} Hz   (ecart {abs(f0_noc-f0)/f0*100:4.1f} %)")
-print(f"Helmholtz + corrections (0,85+0,66)R    : {f0_cor:7.1f} Hz   (ecart {abs(f0_cor-f0)/f0*100:4.1f} %)")
+print(f"f0 measured (simulation, open neck)     : {f0:7.1f} Hz")
+print(f"Helmholtz without end correction        : {f0_noc:7.1f} Hz   (deviation {abs(f0_noc-f0)/f0*100:4.1f} %)")
+print(f"Helmholtz + corrections (0.85+0.66)R    : {f0_cor:7.1f} Hz   (deviation {abs(f0_cor-f0)/f0*100:4.1f} %)")
 print()
-print(f"-> L_eff identifiee    : {Leff_ident*1e3:5.2f} mm  (col geometrique : {L_NECK*1e3:.0f} mm)")
-print(f"-> correction de bout  : {(Leff_ident-L_NECK)*1e3:5.2f} mm = {(Leff_ident-L_NECK)/R_NECK:.2f} R_col")
-print(f"   (attendu ~1,5 R_col : 0,85 exterieur baffle + ~0,66 interieur)")
+
+# The identification is only as good as the frequency fed into it, and the raw
+# h=1 mm value carries the half-cell mesh bias. Both are shown.
+f_ext = float(np.load('data/convergence_f0.npz')['f_ext'])
+print(f"{'frequency used':<34}{'L_eff (mm)':>12}{'end corr.':>12}")
+for name, f in [("raw, h = 1 mm", f0), ("extrapolated to zero mesh", f_ext)]:
+    Le = identify(f)
+    print(f"{name:<34}{Le*1e3:>12.2f}{(Le-L_NECK)/R_NECK:>10.2f} R")
+print(f"{'expected (0.85 exterior + 0.66 interior)':<34}{'':>12}{1.51:>10.2f} R")
 """)
 
-md(r"""**Lecture.** La simulation à col ouvert tombe à **2 %** de la formule de Helmholtz *corrigée*,
-alors qu'elle s'écarte de ~15 % de la formule *non corrigée* : le maillage extérieur **produit**
-la correction de bout au lieu de la supposer. La longueur effective identifiée est cohérente avec
-la somme des corrections intérieure et extérieure retenues dans l'étude FDM du projet.
+md(r"""**Reading.** The open-neck simulation lands within a few percent of the *corrected* Helmholtz
+formula, while it departs by some 15 % from the *uncorrected* one: the exterior mesh **produces**
+the end correction instead of assuming it.
 
-**Amortissement.** Le $Q\approx105$ mesuré ici ne contient **que** les pertes par **rayonnement**
-(le modèle est non visqueux). L'étude du projet estime les pertes viscothermiques du col à
-$Q_{\text{visc}}\approx47$, qui **dominent** : un résonateur réel aurait
-$Q^{-1}=Q_{\text{ray}}^{-1}+Q_{\text{visc}}^{-1}$, soit $Q\approx32$ — il sonnerait donc plus
-brièvement que sur cette animation.
+The identification of the effective length makes the point sharply. Fed the raw frequency at
+h = 1 mm, it returns an end correction of 1.29 R -- 15 % short of the expected 1.51 R, and one
+might conclude the exterior mesh underestimates the radiation load. Fed the frequency extrapolated
+to zero mesh size, it returns **1.56 R**, within 3 % of the expected value. The apparent
+shortfall was the half-cell mesh bias, not physics.
+
+**Damping.** The $Q$ measured here contains **only** radiation losses, since the model is
+inviscid. The harmonic study estimates the viscothermal losses of the neck at
+$Q_{\text{visc}}\approx47$, which **dominate**: a real resonator would have
+$Q^{-1}=Q_{\text{rad}}^{-1}+Q_{\text{visc}}^{-1}$, so $Q\approx32$ -- it would ring more briefly
+than this animation suggests. Section 5 shows that the radiation $Q$ computed here is not in fact
+converged, which is the reason the project carries an experimental protocol
+(`docs/EXPERIMENTAL_PROTOCOL.md`) to settle the damping by measurement.
 """)
 
 co(r"""Q_visc = 47.0
 Q_tot = 1.0/(1.0/Q + 1.0/Q_visc)
-print(f"Q_rayonnement (calcule ici) : {Q:6.1f}")
-print(f"Q_visqueux (etude projet)   : {Q_visc:6.1f}   <- dominant")
-print(f"Q total attendu (reel)      : {Q_tot:6.1f}")
-print(f"temps de decroissance associe : {Q_tot/(np.pi*f0)*1e3:.0f} ms")
+print(f"Q radiation (computed here) : {Q:6.1f}")
+print(f"Q viscous (harmonic study)  : {Q_visc:6.1f}   <- dominant")
+print(f"expected total Q (real)     : {Q_tot:6.1f}")
+print(f"associated decay time       : {Q_tot/(np.pi*f0)*1e3:.0f} ms")
 """)
 
-md(r"""## 5. Vérification : convergence en maillage et sensibilité aux frontières
+md(r"""## 5. Verification: mesh convergence and sensitivity to the boundaries
 
-Deux contrôles que ce notebook omettait, et qui corrigent l'un des résultats annoncés.
+Two checks the first version of this notebook omitted -- and they correct one of the results it
+announced.
 """)
 
-co(r"""# --- (a) convergence en maillage de f0 ---
-cv = np.load('data/convergence_f0.npz')
+co(r"""# --- (a) mesh convergence of f0 ---
 import pandas as pd
+cv = np.load('data/convergence_f0.npz')
 display(pd.DataFrame({
     "h (mm)": [f"{x*1e3:.2f}" for x in cv['h']],
-    "f0 (Hz, sinusoide ajustee)": [f"{x:.2f}" for x in cv['f0']],
+    "f0 (Hz, damped-sinusoid fit)": [f"{x:.2f}" for x in cv['f0']],
 }))
-print(f"ordre observe        : {float(cv['order']):.2f}")
-print(f"f0 extrapolee h -> 0 : {float(cv['f_ext']):.2f} Hz")
-print(f"Helmholtz corrigee   : {float(cv['f_theo']):.2f} Hz")
-print(f"ecart                : {abs(float(cv['f_ext'])-float(cv['f_theo']))/float(cv['f_theo'])*100:.2f} %")
+print(f"observed order         : {float(cv['order']):.3f}")
+print(f"f0 extrapolated to h=0 : {float(cv['f_ext']):.2f} Hz   (GCI {float(cv['gci'])*100:.2f} %)")
+print(f"corrected Helmholtz    : {float(cv['f_theo']):.2f} Hz")
+print(f"deviation              : {abs(float(cv['f_ext'])-float(cv['f_theo']))/float(cv['f_theo'])*100:.2f} %")
 """)
 
-md(r"""La fréquence **dérive avec le maillage**, et ce n'est pas du bruit : le solveur place ses
-parois une demi-maille au-delà du dernier nœud (voir `mms_transient.py`), donc la géométrie
-effectivement simulée vaut $R+h/2$ et $H+h$. C'est un biais **du premier ordre**, qu'il faut
-extrapoler pour comparer à une théorie analytique.
+md(r"""The frequency **drifts with the mesh**, and this is not noise: the solver places its walls half
+a cell beyond the last node (see `mms_transient.py`), so the geometry actually simulated is
+$R+h/2$ and $H+h$. That is a **first-order** bias, and it has to be extrapolated away before the
+result is compared with an analytic theory.
 
-> **Correction d'un résultat annoncé.** La valeur brute à $h=1$ mm (209,8 Hz) semblait coïncider
-> remarquablement avec le calcul fréquentiel par impédance de rayonnement (209,84 Hz). Cette
-> coïncidence était **fortuite** : le biais de maillage (+3 % à cette résolution) remontait la
-> valeur depuis ~205 Hz. Une fois extrapolée, la fréquence transitoire vaut 205,4 Hz. Les deux
-> nombres comparés portaient chacun une erreur de discrétisation non corrigée.
+> **A result corrected.** The raw value at $h=1$ mm (209.8 Hz) appeared to agree remarkably well
+> with the harmonic calculation using a radiation impedance (209.84 Hz). That agreement was
+> **fortuitous**: the mesh bias, about +3 % at this resolution, had lifted the value from roughly
+> 205 Hz. Once extrapolated, the transient frequency is 204.6 Hz, within 0.47 % of the corrected
+> theory. The two numbers originally compared each carried an uncorrected discretisation error.
 """)
 
-co(r"""# --- (b) sensibilite aux couches absorbantes et a la taille du domaine ---
+co(r"""# --- (b) sensitivity to the absorbing layers and to the domain size ---
 sp = np.load('data/sponge_sensitivity.npz', allow_pickle=True)
+LABELS = {'sp_base': 'baseline', 'sp_sponge_epais': 'thick sponge',
+          'sp_domaine_grand': 'large domain', 'sp_sponge_faible': 'weak absorption'}
 display(pd.DataFrame({
-    "configuration": [str(x) for x in sp['noms']],
-    "L_sponge (m)": sp['L_sp'], "Z_ext (m)": sp['Z_ext'], "facteur sigma": sp['sigma'],
+    "configuration": [LABELS.get(str(x), str(x)) for x in sp['noms']],
+    "L_sponge (m)": sp['L_sp'], "Z_ext (m)": sp['Z_ext'], "sigma factor": sp['sigma'],
     "f0 (Hz)": [f"{x:.1f}" for x in sp['f0']], "Q": [f"{x:.0f}" for x in sp['Q']],
 }))
-print(f"f0 : variation totale {(sp['f0'].max()-sp['f0'].min())/sp['f0'].min()*100:.2f} %")
-print(f"Q  : variation totale facteur {sp['Q'].max()/sp['Q'].min():.1f}")
+print(f"f0 : total variation {(sp['f0'].max()-sp['f0'].min())/sp['f0'].min()*100:.2f} %")
+print(f"Q  : total variation, a factor of {sp['Q'].max()/sp['Q'].min():.1f}")
 """)
 
-md(r"""**Deux conclusions opposées.**
+md(r"""**Two opposite conclusions.**
 
-* **$f_0$ est parfaitement robuste** : elle ne bouge pas d'un dixième de hertz quand on double
-  l'épaisseur de la couche absorbante, qu'on agrandit le domaine ou qu'on affaiblit l'absorption.
-  La fréquence propre est bien une propriété du résonateur.
+* **$f_0$ is perfectly robust.** It does not move by a tenth of a hertz when the absorbing layer
+  is doubled in thickness, when the domain is enlarged, or when the absorption is weakened. The
+  natural frequency really is a property of the resonator.
 
-* **$Q$ ne l'est pas du tout** : il varie d'un **facteur 6** sous l'effet de réglages purement
-  numériques. Le « $Q pprox 105$ » obtenu avec le domaine de référence est donc un **artefact**,
-  pas une mesure. En agrandissant le domaine extérieur, $Q$ monte vers 267 — ce qui rejoint la
-  valeur du volet fréquentiel (278) — mais sans être convergé pour autant : il continue de croître
-  avec la taille du domaine.
+* **$Q$ is not robust at all.** It varies by a **factor of 6** under purely numerical settings.
+  The $Q\approx105$ obtained with the reference domain is therefore an **artefact**, not a
+  measurement. Enlarging the exterior domain pushes $Q$ towards 267, which approaches the value
+  from the harmonic solver -- but without being converged: it keeps growing with the domain size.
 
-Autrement dit, ce calcul permet de mesurer une fréquence propre, **pas** un amortissement par
-rayonnement. Pour ce dernier il faudrait une PML formelle et une étude de convergence dédiée.
+In other words, this calculation measures a natural frequency well and a radiation damping badly.
+Settling the latter numerically would require a formal PML and a dedicated convergence study;
+settling it experimentally is what `analyze_recording.py` is for.
 """)
 
-md(r"""## 6. Limites et honnêteté
+md(r"""## 6. Limits, stated plainly
 
-* **Sous-longueur d'onde.** À 210 Hz, $\lambda\approx1{,}6$ m contre 12 cm de résonateur : la
-  pression est **quasi uniforme dans la cavité**. Ce qu'on voit « se propager » est surtout le
-  champ extérieur et le gradient dans le col ; la résonance elle-même est un effet **localisé**
-  (masse d'air du col contre raideur de la cavité), pas une onde stationnaire dans la cavité.
-* **Pas de pertes visqueuses** dans ce modèle : $Q$ n'est pas le $Q$ réel (cf. §4).
-* **Couches absorbantes** (sponge) plutôt qu'une PML formelle : réflexions résiduelles faibles
-  mais non nulles, ce qui affecte légèrement $Q_{\text{ray}}$ (et très peu $f_0$).
-* **Baffle infini** supposé (demi-espace) : cohérent avec le modèle de piston bafflé utilisé
-  ailleurs dans le projet, mais différent d'un col émergeant à l'air libre.
+* **Sub-wavelength.** At 210 Hz, $\lambda\approx1.6$ m against 12 cm of resonator: the pressure is
+  **nearly uniform inside the cavity**. What is seen to propagate is mostly the exterior field and
+  the gradient in the neck; the resonance itself is a **lumped** effect -- the mass of air in the
+  neck against the stiffness of the cavity -- not a standing wave in the cavity.
+* **No viscous losses** in this model, so $Q$ here is not the real $Q$ (section 4).
+* **Absorbing layers** rather than a formal PML: residual reflections are small but not zero,
+  which affects $Q_{\text{rad}}$ appreciably and $f_0$ very little.
+* **An infinite baffle** is assumed. This is consistent with the baffled-piston model used
+  elsewhere in the project, but differs from a neck protruding into free air.
 
-## 6. Reproduire
+## 7. Reproducing this notebook
 
 ```bash
-python fdm_open_resonator.py            # etude (250 ms) -> data/open_resonator.npz  (~6 min)
-OR_TMS=120 OR_NFRAMES=420 OR_TAG=_anim python fdm_open_resonator.py   # donnees animation
-python make_resonance_anim.py           # -> plots/helmholtz_resonance.gif
+python fdm_open_resonator.py                                          # study (~6 min)
+OR_TMS=120 OR_NFRAMES=420 OR_TAG=_anim python fdm_open_resonator.py   # animation data
+python make_resonance_anim.py                                         # -> plots/helmholtz_resonance.gif
+python convergence_f0.py                                              # mesh convergence of f0
 ```
 """)
 
@@ -260,4 +279,4 @@ nb = new_notebook(cells=cells, metadata={
     'language_info': {'name': 'python'}})
 with open('resonance_transitoire.ipynb', 'w', encoding='utf-8') as f:
     nbf.write(nb, f)
-print(f"Notebook ecrit : resonance_transitoire.ipynb ({len(cells)} cellules)")
+print(f"Notebook written: resonance_transitoire.ipynb ({len(cells)} cells)")
