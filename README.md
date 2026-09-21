@@ -12,6 +12,7 @@ away.
 | **1** | Where is the resonance, and what sets it? | harmonic FDM, `etude_helmholtz.ipynb` | full V&V: MMS order **2.03**, GCI **≈ 2 %**, validation against Selamet *et al.* to **0.9 % / 2.2 %** |
 | **2** | What does the resonance look like **in real time**? | transient FDM with an open neck and a meshed exterior, `resonance_transitoire.ipynb` | **f₀ = 204.6 Hz** extrapolated (GCI 1.5 %), within **0.47 %** of the corrected formula |
 | **3** | Does a real bottle agree? | ring-down measurement, `analyze_recording.py` | protocol and analysis chain in place and self-verified; awaiting a recording |
+| **4** | Would a neural solver do better? | basis benchmark against the verified field, `bench_bases.py` | no: every family represents the field to 0.4 % and **none** represents its Laplacian |
 
 ![Helmholtz resonance — open neck](plots/helmholtz_resonance.gif)
 
@@ -163,6 +164,49 @@ That second check is worth stating plainly: a lumped radiation resistance comput
 geometry alone lands within 2.5 % of the 285.6 obtained by meshing the mouth and sweeping a
 thousand frequencies. The two routes are independent.
 
+## Part 4 — Why neural PDE solvers fail here, measured
+
+Physics-informed networks are the obvious thing to try on a Helmholtz problem, and the usual
+diagnosis when they underperform is spectral bias, with a better basis as the remedy: Fourier
+features, SIREN, Gabor atoms, domain decomposition. Having a *verified* reference makes it
+possible to test that diagnosis instead of assuming it.
+
+`bench_bases.py` measures two things for each family, at random initialisation, **without any
+training at all**:
+
+- the best possible least-squares fit of the FDM field onto the basis — can it represent P?
+- the PDE residual **of that same best-possible field** — does it satisfy the equation?
+
+| basis | field error | residual of that same field | κ(A_phys) |
+|---|---|---|---|
+| tanh (reference) | 0.36 % | 997 875 % | 6.8·10¹³ |
+| SIREN, ω₀ = 5 | 0.16 % | 427 910 % | 1.1·10⁴ |
+| SIREN, ω₀ = 8 | 0.26 % | 711 862 % | **5.1·10²** |
+| Gabor atoms | **0.15 %** | **253 570 %** | 2.3·10⁴ |
+| domain decomposition | 0.16 % | 425 392 % | 3.9·10³ |
+| Trefftz (Bessel) | 4.04 % | 100 % | 0 |
+
+**100 % is exactly as bad as writing down the zero field.** Every neural family represents the
+field to better than 0.4 % and every one of them leaves a residual in the hundreds of thousands of
+percent. The best, Gabor, is still 2 536 times worse than zero.
+
+![Neural bases: capacity against residual](plots/bench_bases.png)
+
+The obstacle is not capacity. In this geometry the Laplacian amplifies a representation error by
+**1/L² = 625**, and the true solution lives on a near-cancellation — ∇²P and −k²P are both enormous
+and their difference is small. Representing P to 0.15 % is nowhere near enough to represent ∇²P.
+
+What the basis *does* change is the conditioning of the system actually solved: eleven orders of
+magnitude between tanh and SIREN ω₀ = 8. That is a real result, and a real reason to prefer sine
+activations. It is simply not the binding constraint.
+
+Trefftz is the exception that proves the point. Its functions satisfy ∇²φ + k²φ = 0 exactly, so
+A_phys is identically zero: it cannot misrepresent the operator because it never approximates it —
+and for the same reason it cannot carry the source, which is why it sits at exactly 100 %. A
+Trefftz method needs a particular solution supplied separately.
+
+Two minutes on a CPU, no training, no checkpoints. The measurement is the deliverable.
+
 ## Reproducing
 
 ```bash
@@ -173,6 +217,7 @@ python convergence_f0.py              # mesh convergence and extrapolation of f0
 python make_resonance_anim.py         # animation (after a run with OR_TAG=_anim, see the notebook)
 python make_mode_anim.py              # animation of the established resonant mode (~30 s)
 python analyze_recording.py --self-test   # part 3: verify the measurement chain
+python bench_bases.py                 # part 4: neural bases, no training (~2 min)
 python make_paper_figures.py          # redraw the figures of the PDF from data/
 ```
 
@@ -186,6 +231,7 @@ fdm_sweep.py                     full frequency sweep with a radiation impedance
 mms_transient.py                 code verification of the transient scheme (space-time MMS)
 convergence_f0.py                mesh convergence of f0 + Richardson extrapolation
 analyze_recording.py             part 3 — ring-down analysis of a real resonator
+bench_bases.py                   part 4 — neural bases measured against the reference
 make_paper_figures.py            redraws the figures of the PDF from data/
 make_resonance_anim.py           animation of the transient regime
 make_mode_anim.py                animation of the established resonant mode
