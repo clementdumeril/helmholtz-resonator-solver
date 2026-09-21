@@ -4,3 +4,7 @@ matplotlib>=3.7
 pandas>=2.0
 notebook>=7.0
 nbconvert>=7.0
+
+# Only for bench_bases.py, which measures neural bases without training them.
+# Nothing else in the repository imports it; a CPU build is enough.
+torch>=2.0
