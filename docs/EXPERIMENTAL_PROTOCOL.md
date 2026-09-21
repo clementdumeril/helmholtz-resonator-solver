@@ -5,11 +5,16 @@ quality factor — with a physical measurement, using a bottle and a phone. This
 calculation replaces.
 
 **Why it matters here.** The two solvers in this repository agree on the natural frequency to
-within 0.6 %, and both cross-check against the corrected Helmholtz formula. Neither settles the
-**damping**: the harmonic solver returns Q ≈ 286 from an analytic radiation impedance, the
-transient solver returns anything between 44 and 267 depending on how the outer boundary is
-treated, and the estimated viscothermal losses of the neck (Q ≈ 47) dominate both. The project
-measures a natural frequency well and a damping badly — and only an experiment closes that gap.
+within 0.6 %, and both cross-check against the corrected Helmholtz formula. The **radiation**
+damping has since been reconciled too: with a perfectly matched layer and an exterior large enough
+in wavelengths, the meshed solver climbs to meet the analytic radiation impedance near Q ≈ 286
+(`pml_study.py`).
+
+That still leaves the damping of a real object unsettled, and by a wide margin. Radiation is the
+smaller loss: the viscothermal friction of the neck is estimated at Q ≈ 47, three times stronger,
+and no solver in this repository resolves the sub-millimetre boundary layer that produces it. A
+real bottle should ring at Q ≈ 40, dominated by a mechanism that has only ever been estimated
+here. Only a measurement closes that gap.
 
 The analysis script is [`analyze_recording.py`](../analyze_recording.py), at the repository root.
 

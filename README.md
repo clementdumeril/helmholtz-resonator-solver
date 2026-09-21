@@ -13,6 +13,7 @@ away.
 | **2** | What does the resonance look like **in real time**? | transient FDM with an open neck and a meshed exterior, `resonance_transitoire.ipynb` | **f₀ = 204.6 Hz** extrapolated (GCI 1.5 %), within **0.47 %** of the corrected formula |
 | **3** | Does a real bottle agree? | ring-down measurement, `analyze_recording.py` | protocol and analysis chain in place and self-verified; awaiting a recording |
 | **4** | Would a neural solver do better? | basis benchmark against the verified field, `bench_bases.py` | no: every family represents the field to 0.4 % and **none** represents its Laplacian |
+| **5** | Why was the damping never converged? | sponge / ABC / PML compared, `pml_study.py` | the sponge reflects **44 %**; with a PML the two radiation models stop disagreeing |
 
 ![Helmholtz resonance — open neck](plots/helmholtz_resonance.gif)
 
@@ -67,7 +68,7 @@ instead of postulating it — the first perspective of Part 1, now carried out.
 | f₀ **extrapolated to zero mesh size** | **204.6 Hz** (GCI 1.5 %) | Helmholtz **with** end corrections: 205.6 Hz | **0.47 %** |
 | — | — | Helmholtz **without** correction: 241.3 Hz | 15 % |
 | Observed order of convergence | 0.86 | three grids: 2 / 1 / 0.5 mm | — |
-| Q by radiation | **not measurable here** | varies by a factor of 6 with the boundary treatment | numerical artefact |
+| Q by radiation | **not measurable with this termination** | varies by a factor of 6 with the boundary treatment | resolved in Part 5 |
 
 **A verification added afterwards, which corrected two announced results.** The solver places its
 walls half a cell beyond the last node, so the geometry actually simulated is `R+h/2` and `H+h`,
@@ -78,7 +79,8 @@ biasing f₀ at first order. Three consequences:
 - once extrapolated, f₀ = **204.6 Hz**, within 0.47 % of the corrected theory — weaker agreement
   on its face, but this time **controlled** and carrying an uncertainty;
 - f₀ is **perfectly robust** to the boundary treatment (0.00 % variation), whereas **Q varies by a
-  factor of 6**: this calculation measures a natural frequency, not a damping.
+  factor of 6**: with these absorbing layers the calculation measures a natural frequency, not a
+  damping. Part 5 finds the cause and removes it.
 
 Code verification: `mms_transient.py` (space-time manufactured solution, **order 1.98**), which
 exercises the mask, the zero fluxes and the axis — none of which the Part 1 MMS covered.
@@ -119,9 +121,9 @@ two different radiation models, one answer: a **controlled** cross-validation ra
 fortunate one.
 
 Both observed orders are near 0.9 rather than 2, because the half-cell bias is present in **both**
-solvers. **Q, by contrast, differs by a factor of 2.7** between the radiation models — 285.6 from
-the analytic impedance against 105 from the meshed exterior. This project measures a natural
-frequency very well, and a damping badly.
+solvers. **Q, by contrast, appeared to differ by a factor of 2.7** between the radiation models —
+285.6 from the analytic impedance against 105 from the meshed exterior. That disagreement turned
+out to be numerical, not physical, and Part 5 takes it apart.
 
 ### Animation of the established mode — `make_mode_anim.py`
 
@@ -133,10 +135,10 @@ is the spring.*
 
 ## Part 3 — Closing the loop: measuring a real resonator
 
-Everything above is computation. The one quantity the computation does not settle is the damping,
-and the disagreement is not small: Q ≈ 286 from the analytic radiation impedance, anywhere from 44
-to 267 from the meshed exterior depending on how the outer boundary is treated, against an
-estimated Q ≈ 47 from viscothermal losses in the neck, which should dominate a real object.
+Everything above is computation. Part 5 reconciles the two computed radiation Q's with each other,
+but both describe radiation alone — and a real resonator is dominated by something neither solver
+resolves: viscothermal friction in the neck, estimated at Q ≈ 47 against a radiation Q near 286.
+A real bottle should therefore ring at Q ≈ 40, and only a measurement can confirm that.
 
 [`docs/EXPERIMENTAL_PROTOCOL.md`](docs/EXPERIMENTAL_PROTOCOL.md) sets out a measurement that needs
 a bottle, a phone and an afternoon, and [`analyze_recording.py`](analyze_recording.py) performs the
@@ -207,6 +209,84 @@ Trefftz method needs a particular solution supplied separately.
 
 Two minutes on a CPU, no training, no checkpoints. The measurement is the deliverable.
 
+## Part 5 — The damping, and why it was never converged
+
+The sections above state twice that the radiation Q is not trustworthy: it moves by a factor of six
+with purely numerical settings, and the meshed exterior disagrees with the analytic radiation
+impedance by a factor of 2.7. `pml_study.py` implements three outer-boundary treatments in one
+solver and measures them, rather than arguing about them.
+
+**How much does each one reflect?** A pulse is fired into a homogeneous exterior and compared
+against the same run on a domain four times larger, where nothing can return within the window. The
+difference *is* the reflection, so no analytic reference is needed.
+
+| termination | spurious reflection |
+|---|---|
+| sponge layer (what the solver used) | **44 %** (−7 dB) |
+| first-order ABC (Mur) | 5.6 % (−25 dB) |
+| PML, same σ as the sponge | 7.1 % (−23 dB) |
+| **PML, σ tuned** | **4.0 %** (−28 dB) |
+
+The sponge sends back nearly half the incident amplitude. That single number explains the factor of
+six.
+
+On this test the first-order ABC beats an untuned PML, which is not surprising: the source sits on
+the axis, so the wavefront meets the outer boundary close to normal incidence, and Mur is exact at
+normal incidence. It is the resonator run below, where the field arrives from every angle, that
+separates them.
+
+**The PML floors at −28 dB, and the reason is geometric, not a bug.** Running each wall in isolation
+separates them:
+
+| boundary | PML reflection |
+|---|---|
+| flat (z), where the Cartesian complex stretch is exact | **0.093 %** (−61 dB) |
+| curved (r), where the 1/r term is omitted | 4.03 % (−28 dB) |
+
+A factor of 43. On a plane the implementation reaches the −61 dB expected of a textbook PML; the
+floor is entirely the cost of applying a Cartesian stretch to a cylindrical surface. A genuinely
+cylindrical PML is the fix, and this measurement is what says so.
+
+**Does the resonator's Q then settle?** Only the PML holds still:
+
+| termination | Q at Z_ext = 10 cm | at 18 cm | drift |
+|---|---|---|---|
+| sponge | 104.7 | 132.8 | +26.8 % |
+| first-order ABC | 67.5 | 90.2 | +33.5 % |
+| **PML** | 98.1 | 96.4 | **−1.8 %** |
+
+f₀ moves by at most 0.14 % for any of them — the same lesson as everywhere else in this project.
+
+*(The sponge run at 10 cm returns f₀ = 209.25 Hz and Q = 104.7, reproducing the verified solver of
+Part 2 to the hundredth of a hertz. The two codes agree.)*
+
+**But "settled between 10 and 18 cm" is not "converged".** At 209 Hz the wavelength is 1.64 m, so a
+10 cm exterior is 0.06 of one: the PML sits deep in the reactive near field of the mouth and
+truncates evanescent content a free half-space would keep. Enlarging it properly:
+
+| exterior | in wavelengths | f₀ (Hz) | radiation Q |
+|---|---|---|---|
+| 10 cm | 0.061 | 208.32 | 98.1 |
+| 18 cm | 0.110 | 208.42 | 116.6 |
+| 30 cm | 0.183 | 208.53 | 187.2 |
+| **45 cm** | **0.274** | 208.49 | **269.6** |
+
+![Outer-boundary treatments](plots/pml_study.png)
+
+Q climbs from 98 to 270 and heads straight for the **285.6** of the analytic radiation impedance —
+and for the 292.7 of the lumped baffled-piston formula, which agree with each other to 2.5 %. The
+factor-2.7 disagreement this project reported was never physics. It was a domain one sixteenth of a
+wavelength across.
+
+Meanwhile f₀ stays within 0.1 % across a 4.5-fold enlargement. Frequency robust, damping demanding:
+the same conclusion as everywhere, now with the reason attached.
+
+**What is still open.** The largest run is 0.27 wavelengths and Q is at 270 against 286. The trend is
+consistent with converging there; it is not a demonstration that it does. Showing it would need an
+exterior around half a wavelength, which at this mesh is several hours of CPU — and it would settle
+a quantity that is in any case three times smaller than the viscothermal losses of a real neck.
+Part 3 is the cheaper arbiter.
+
 ## Reproducing
 
 ```bash
@@ -218,6 +298,7 @@ python make_resonance_anim.py         # animation (after a run with OR_TAG=_anim
 python make_mode_anim.py              # animation of the established resonant mode (~30 s)
 python analyze_recording.py --self-test   # part 3: verify the measurement chain
 python bench_bases.py                 # part 4: neural bases, no training (~2 min)
+python pml_study.py                   # part 5: sponge vs ABC vs PML (long; PML_SKIP_C=1 for the short form)
 python make_paper_figures.py          # redraw the figures of the PDF from data/
 ```
 
@@ -232,6 +313,7 @@ mms_transient.py                 code verification of the transient scheme (spac
 convergence_f0.py                mesh convergence of f0 + Richardson extrapolation
 analyze_recording.py             part 3 — ring-down analysis of a real resonator
 bench_bases.py                   part 4 — neural bases measured against the reference
+pml_study.py                     part 5 — outer-boundary treatments and the radiation Q
 make_paper_figures.py            redraws the figures of the PDF from data/
 make_resonance_anim.py           animation of the transient regime
 make_mode_anim.py                animation of the established resonant mode
@@ -247,11 +329,15 @@ data/  plots/                    data and figures
 verification, agreement with published measurements without a single fitted parameter, and a
 theory that falls inside both uncertainty intervals.
 
-**Not established.** The damping. Neither solver converges on Q, and the repository says so instead
-of quoting a number. The exterior treatment — absorbing layers rather than a formal PML — is the
-reason, and a formal PML with its own convergence study is the numerical fix. The experimental
-route in Part 3 is the cheaper one, and it is the one that decides which of the computed values,
-if any, describes a real object.
+**Established since, in Part 5.** The radiation damping, to the extent a computation can settle it.
+The sponge layer reflected 44 % of the incident amplitude, which is what made Q move by a factor of
+six; a PML removes that, and the meshed exterior then climbs to meet the analytic radiation
+impedance as the domain grows in wavelengths. The two routes agree.
+
+**Still not established.** That the climb has actually stopped. The largest exterior run is 0.27
+wavelengths across and Q is at 270 against an analytic 286 — consistent with converging there, not
+a demonstration of it. And the whole radiation question is secondary for a real object anyway,
+since viscothermal losses in the neck are three times larger. That is what Part 3 is for.
 
 ## References
 
