@@ -18,6 +18,11 @@ here. Only a measurement closes that gap.
 
 The analysis script is [`experiments/ringdown_analysis.py`](ringdown_analysis.py).
 
+**Status.** This measurement has not been made. In its place,
+[`literature_validation.py`](literature_validation.py) confronts the model with published data —
+which settles part of the question and leaves the damping open. The protocol below stands, and the
+analysis chain is built and self-verified, for whenever the measurement is worth making.
+
 ---
 
 ## 0. Verify the analysis chain first

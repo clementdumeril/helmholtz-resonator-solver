@@ -49,18 +49,25 @@ class HarmonicSolver:
     """The geometry is built once; only the frequency-dependent parts are
     reassembled per solve."""
 
-    def __init__(self, h=1e-3, src_amp=SRC_A, src_width=SRC_W, src_z=SRC_Z):
+    def __init__(self, h=1e-3, src_amp=SRC_A, src_width=SRC_W, src_z=None,
+                 r_neck=R_NECK, l_neck=L_NECK, r_cav=R_CAV, h_cav=H_CAV):
         self.h = h
-        self.nr = int(round(R_CAV / h)) + 1
-        self.nz = int(round(Z_TOP / h)) + 1
+        self.r_neck, self.l_neck = r_neck, l_neck
+        self.r_cav, self.h_cav = r_cav, h_cav
+        self.z_top = l_neck + h_cav
+        if src_z is None:                       # mid-height of the cavity
+            src_z = l_neck + 0.5 * h_cav
+
+        self.nr = int(round(r_cav / h)) + 1
+        self.nz = int(round(self.z_top / h)) + 1
         self.r = np.arange(self.nr) * h
         self.z = np.arange(self.nz) * h
         rr, zz = np.meshgrid(self.r, self.z, indexing="ij")
         self.rr, self.zz = rr, zz
 
-        self.fluid = (((zz < L_NECK - 1e-12) & (rr <= R_NECK + 1e-12))
-                      | ((zz >= L_NECK - 1e-12) & (rr <= R_CAV + 1e-12)))
-        self.mouth = self.fluid & (np.abs(zz) < 1e-12) & (rr <= R_NECK + 1e-12)
+        self.fluid = (((zz < l_neck - 1e-12) & (rr <= r_neck + 1e-12))
+                      | ((zz >= l_neck - 1e-12) & (rr <= r_cav + 1e-12)))
+        self.mouth = self.fluid & (np.abs(zz) < 1e-12) & (rr <= r_neck + 1e-12)
         self.forcing = src_amp * np.exp(
             -(rr ** 2 + (zz - src_z) ** 2) / (2 * src_width ** 2))
         self.n = self.nr * self.nz
@@ -71,7 +78,7 @@ class HarmonicSolver:
         h, nr, nz = self.h, self.nr, self.nz
         w = 2 * np.pi * freq
         k2 = (w / C) ** 2
-        ka = w / C * R_NECK
+        ka = w / C * self.r_neck
         zr = RHO * C * (0.5 * ka ** 2 + 1j * (8 / (3 * np.pi)) * ka)   # baffled piston
         alpha = 1j * w * RHO / zr
 
