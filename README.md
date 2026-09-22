@@ -48,6 +48,7 @@ the cavity **rings on its own** at its natural frequency. No frequency is impose
 | **1.5 %** | grid-convergence uncertainty (GCI) |
 | **0.61 %** | difference between two independent solvers |
 | **0.9 – 2.2 %** | deviation from published measurements, no fitted parameter |
+| **11 %** | and one published resonator the model does not explain — section 6 |
 
 ---
 
@@ -61,7 +62,7 @@ something in this order.
 | **Code verification** | Did I solve the PDE correctly? | manufactured solutions, observed order **2.03** (harmonic) and **1.98** (transient) |
 | **Solution verification** | Is the mesh resolved enough? | Richardson extrapolation + GCI on three grids, plus a fourth control grid — uncertainty **≈ 2 %** |
 | **Cross-validation** | Does an independent solver agree? | **203.35** vs **204.60 Hz**, uncertainty intervals overlapping |
-| **Model validation** | Does it match reality? | Selamet *et al.* (1997), **0.9 %** and **2.2 %**, no adjusted parameter |
+| **Model validation** | Does it match reality? | Selamet *et al.* (1997), **0.9 %** and **2.2 %**, no adjusted parameter — and one published case the model misses by 11 %, section 6 |
 
 The corrected Helmholtz theory, 205.56 Hz, falls inside both solvers' intervals.
 
@@ -197,15 +198,42 @@ converging there but does not demonstrate it.
 
 ## 6 — Extensions and negative results
 
-**Physical validation, pending a recording.** [`experiments/protocol.md`](experiments/protocol.md)
-sets out a ring-down measurement needing a bottle, a phone and an afternoon, and
-[`experiments/ringdown_analysis.py`](experiments/ringdown_analysis.py) performs the analysis — FFT
-with parabolic peak interpolation for f₀, then a band-pass, Hilbert envelope and logarithmic
-decrement for Q, *the same estimator the transient solver uses*. The chain is verified before any
-bottle is recorded (`--self-test`): it recovers synthetic decays to 0.007 % on f₀ and 4.4 % on Q
-across 128–480 Hz, and its lumped predictions land within 0.06 % of theory and 2.5 % of the harmonic
-sweep. This matters because radiation is the *smaller* loss — the neck's viscothermal friction is
-estimated at Q ≈ 47, three times stronger, and no solver here resolves it.
+**Validation against published measurements.** No in-house experiment was run.
+[`experiments/literature_validation.py`](experiments/literature_validation.py) confronts the model
+with other people's data instead — weaker in that the apparatus and the error budget are not mine,
+stronger in that the sources are peer-reviewed and were not chosen after seeing how the model
+performed.
+
+*Where the model earns its keep.* Selamet's two configurations share the same 4500 cm³ cavity in
+two different shapes. The lumped formula knows only the volume, so it returns **85.8 Hz for both**,
+against 91 and 72 Hz measured — it is structurally blind to cavity shape. Resolving the
+two-dimensional field recovers both to within 2.2 %. That gap, +19 % against +0.9 % on the same
+resonator, is the clearest single argument for the solver in this repository.
+
+*Where it does not.* Indenbom & Pogossian (Acta Acustica 7, 30, 2023; arXiv:2212.08858) measure a
+100 mL Erlenmeyer flask at **351 Hz** where the lumped formula gives 391 Hz. This project's own
+lumped model reproduces their 391 Hz to 0.1 %, so the implementations agree — and then the finite
+differences land at **387–396 Hz across every plausible cavity aspect ratio**. Resolving the field
+does not close the gap. Whatever is missing is not the field near the neck. Arithmetically the
+discrepancy corresponds to an effective neck of 54 mm rather than 43, an end correction of 2.4 *a*
+instead of 1.26 *a* — consistent with an Erlenmeyer neck flaring into its conical shoulder, which
+this solver's cylindrical cavity cannot represent. Moloney (2004) reaches the same conclusion for
+glass bottles. It is stated here as an open discrepancy, not a resolved one.
+
+*Damping.* The only open-access half-width found for a resonator with fully stated geometry gives
+Q between **18 and 30** — the range, not a number, because the paper does not say whether its
+half-width is at half amplitude or half power, and the two conventions differ by √3. This project
+predicts **40**. The model is optimistic about damping, in the same direction Moloney reports.
+Radiation is not the culprit: it is the *smaller* loss, with viscothermal friction in the neck
+three times stronger and unresolved by either solver.
+
+![Validation against published data](figures/literature_validation.png)
+
+The ring-down apparatus remains built and verified —
+[`experiments/protocol.md`](experiments/protocol.md) and
+[`experiments/ringdown_analysis.py`](experiments/ringdown_analysis.py), whose `--self-test`
+recovers synthetic decays to 0.007 % on f₀ and 4.4 % on Q — so the measurement can be made whenever
+a bottle and an afternoon are available.
 
 **Neural PDE solvers: a measured negative result.** Having a verified reference makes it possible to
 test the usual claim — that physics-informed networks underperform on wave problems because of
@@ -234,6 +262,7 @@ python verification/grid_convergence.py         # mesh convergence and extrapola
 python experiments/ringdown_analysis.py --self-test
 python studies/neural_basis_benchmark.py        # no training (~2 min)
 python studies/radiation_boundaries.py          # long; PML_SKIP_C=1 for the short form
+python experiments/literature_validation.py     # against published data (~4 min)
 ```
 
 The notebooks ship **with their outputs**, so every figure is visible without running anything.
@@ -242,7 +271,7 @@ The notebooks ship **with their outputs**, so every figure is visible without ru
 src/          the two solvers
 verification/ manufactured solutions and grid convergence — why the code can be trusted
 studies/      secondary questions: the sweep, the outer boundary, neural bases
-experiments/  physical validation: protocol and ring-down analysis
+experiments/  validation against published data, and the ring-down protocol
 notebooks/    the two studies, with outputs
 tools/        figure and animation generation
 paper/        the write-up, its sources and its bibliography
@@ -257,5 +286,5 @@ Rebuild it with `python tools/make_paper_figures.py` then `latexmk -pdf paper/pa
 
 **References.** Helmholtz (1860) · Rayleigh (1896) · Crandall (1926) · Ingard (1953) ·
 Morse & Ingard (1968) · Bérenger (1994) · Roache (1994, 1998) · Selamet *et al.* (1997) ·
-Peters *et al.* (2003) · Moloney (2004). Full entries in
+Peters *et al.* (2003) · Moloney (2004) · Indenbom & Pogossian (2023). Full entries in
 [`paper/references.bib`](paper/references.bib).
