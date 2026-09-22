@@ -12,22 +12,25 @@ a complete linear solve (~0.1 s), which is precisely why the harmonic route is
 worth taking: 1000 solves here cost 77 s, against the 7 to 17 hours an
 equivalent transient sweep would need.
 
-Output: data/fdm_sweep.npz, plots/fdm_sweep.png
+Output: data/fdm_sweep.npz, figures/fdm_sweep.png
 Env: SW_FMIN (1) SW_FMAX (1000) SW_DF (1.0) SW_H (mm, 1.0) SW_TAG ("")
 """
-import os, time
+
+import os
+import sys
+
+# every path in this file is relative to the repository root
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(ROOT)
+sys.path.insert(0, ROOT)
+
+import time
 import numpy as np
-import scipy.sparse as sp
-from scipy.sparse.linalg import spsolve
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-HERE = os.path.dirname(os.path.abspath(__file__)); os.chdir(HERE)
+from src.harmonic_solver import HarmonicSolver
 
-C, RHO = 343.0, 1.204
-R_NECK, R_CAV, L_NECK, H_CAV = 0.01, 0.04, 0.04, 0.08
-Z_TOP = L_NECK + H_CAV
-SRC_Z, SRC_W, SRC_A = L_NECK + 0.5*H_CAV, 0.01, 1.0e4
 
 FMIN = float(os.environ.get("SW_FMIN", 1.0))
 FMAX = float(os.environ.get("SW_FMAX", 1000.0))
@@ -35,60 +38,16 @@ DF   = float(os.environ.get("SW_DF", 1.0))
 H    = float(os.environ.get("SW_H", 1.0))*1e-3
 TAG  = os.environ.get("SW_TAG", "")
 
-# ---- geometry and mask: constant, computed once ----
-Nr = int(round(R_CAV/H)) + 1
-Nz = int(round(Z_TOP/H)) + 1
-r = np.arange(Nr)*H; z = np.arange(Nz)*H
-RR, ZZ = np.meshgrid(r, z, indexing="ij")
-FLUID = ((ZZ < L_NECK-1e-12) & (RR <= R_NECK+1e-12)) | ((ZZ >= L_NECK-1e-12) & (RR <= R_CAV+1e-12))
-MOUTH = FLUID & (np.abs(ZZ) < 1e-12) & (RR <= R_NECK+1e-12)
-FORC = SRC_A*np.exp(-(RR**2 + (ZZ-SRC_Z)**2)/(2*SRC_W**2))
-N = Nr*Nz
-J_CAV = int(round(0.08/H))          # probe: cavity bottom, on the axis
+SOLVER = HarmonicSolver(h=H)
+FLUID = SOLVER.fluid
+r, z = SOLVER.r, SOLVER.z
+J_CAV = SOLVER.cavity_probe_index(0.08)     # probe: cavity bottom, on the axis
+solve = SOLVER.solve
 
-print(f"grid {Nr}x{Nz} = {N} nodes, {FLUID.sum()} fluid | h = {H*1e3:.2f} mm")
+print(f"grid {SOLVER.nr}x{SOLVER.nz} = {SOLVER.n} nodes, {FLUID.sum()} fluid "
+      f"| h = {H*1e3:.2f} mm")
 print(f"sweep {FMIN:.0f} -> {FMAX:.0f} Hz in steps of {DF:g} Hz "
       f"= {int(round((FMAX-FMIN)/DF))+1} solves")
-
-
-def solve(freq):
-    """One complete solve at the given frequency -> complex field P."""
-    w = 2*np.pi*freq; k2 = (w/C)**2
-    ka = w/C*R_NECK
-    Zr = RHO*C*(0.5*ka**2 + 1j*(8/(3*np.pi))*ka)     # baffled piston
-    alpha = 1j*w*RHO/Zr
-    idx = lambda i, j: i + j*Nr
-    ih2 = 1.0/H**2
-    rows, cols, dat = [], [], []
-    b = np.zeros(N, complex)
-    for i in range(Nr):
-        for j in range(Nz):
-            ci = idx(i, j)
-            if not FLUID[i, j]:
-                rows += [ci]; cols += [ci]; dat += [1.0]; continue
-            diag = k2 + 0j
-            if i == 0:                                   # limiting form on the axis
-                diag += -4*ih2; rows += [ci]; cols += [idx(1, j)]; dat += [4*ih2]
-            else:
-                lc = ih2*(1-0.5/i); rc = ih2*(1+0.5/i); diag += -2*ih2
-                if FLUID[i-1, j]: rows += [ci]; cols += [idx(i-1, j)]; dat += [lc]
-                else:             diag += lc             # ghost node folded in
-                if i+1 < Nr and FLUID[i+1, j]: rows += [ci]; cols += [idx(i+1, j)]; dat += [rc]
-                else:                          diag += rc
-            if MOUTH[i, j]:                              # Robin condition
-                diag += -2*ih2 - 2*alpha/H
-                rows += [ci]; cols += [idx(i, j+1)]; dat += [2*ih2]
-            else:
-                diag += -2*ih2
-                for jj in (j-1, j+1):
-                    if 0 <= jj < Nz and FLUID[i, jj]:
-                        rows += [ci]; cols += [idx(i, jj)]; dat += [ih2]
-                    else:
-                        diag += ih2
-            rows += [ci]; cols += [ci]; dat += [diag]
-            b[ci] = -FORC[i, j]
-    A = sp.coo_matrix((dat, (rows, cols)), shape=(N, N), dtype=complex).tocsr()
-    return spsolve(A, b).reshape((Nz, Nr)).T
 
 
 freqs = np.arange(FMIN, FMAX + 0.5*DF, DF)
@@ -151,5 +110,5 @@ ax[1].plot(freqs, np.degrees(np.unwrap(phase)), "C2", lw=1.2)
 ax[1].axvline(f_pk, color="C3", ls="--", lw=1.1)
 ax[1].set(xlabel="frequency (Hz)", ylabel="phase (deg)")
 ax[1].grid(alpha=.3)
-fig.tight_layout(); fig.savefig(f"plots/fdm_sweep{TAG}.png", dpi=120)
-print(f"Figure: plots/fdm_sweep{TAG}.png | Data: data/fdm_sweep{TAG}.npz")
+fig.tight_layout(); fig.savefig(f"figures/fdm_sweep{TAG}.png", dpi=120)
+print(f"Figure: figures/fdm_sweep{TAG}.png | Data: data/fdm_sweep{TAG}.npz")

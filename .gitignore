@@ -32,10 +32,10 @@ temp_*/
 # the extracted results live in convergence_f0.npz and sponge_sensitivity.npz.
 data/open_resonator_h*.npz
 data/open_resonator_sp_*.npz
-plots/open_resonator_diag_*.png
+figures/open_resonator_diag_*.png
 
 # Raw field snapshots for the animation: 27 MB, and regenerated in ~5 min by
-#   OR_TMS=120 OR_NFRAMES=420 OR_TAG=_anim python fdm_open_resonator.py
+#   OR_TMS=120 OR_NFRAMES=420 OR_TAG=_anim python src/transient_solver.py
 data/open_resonator_anim.npz
 
 # Local archive of earlier exploratory work, kept out of the repository
@@ -58,5 +58,5 @@ _archive/
 # Leftovers of earlier exploratory work, superseded and archived locally
 data/pinn_*.npz
 data/train_pinn_seed*.npz
-plots/train_pinn_seed*.png
+figures/train_pinn_seed*.png
 models/

@@ -44,15 +44,22 @@ solution is a near-cancellation of two large terms and the error constant
 explodes. T(0) = T'(0) = T''(0) = 0, so the leapfrog start from rest is exact
 to third order, well below the error of the scheme.
 
-Output: data/mms_transient.npz, plots/mms_transient.png
+Output: data/mms_transient.npz, figures/mms_transient.png
 """
-import os, time
+
+import os
+import sys
+
+# every path in this file is relative to the repository root
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(ROOT)
+sys.path.insert(0, ROOT)
+
+import time
 import numpy as np
 from scipy.special import j0, jn_zeros
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-
-HERE = os.path.dirname(os.path.abspath(__file__)); os.chdir(HERE)
 
 C = 343.0
 R_DOM, H_DOM = 0.04, 0.12
@@ -142,7 +149,7 @@ print(f"  nominal   : order {on_.mean():.2f}  -> the h/2 offset dominates (first
 print(f"  effective : order {oe.mean():.2f}  -> scheme VERIFIED at order 2")
 print(f"  error reduction at h = 2 mm : factor {en[0]/ee[0]:.0f}")
 
-os.makedirs("data", exist_ok=True); os.makedirs("plots", exist_ok=True)
+os.makedirs("data", exist_ok=True); os.makedirs("figures", exist_ok=True)
 np.savez("data/mms_transient.npz", h=np.array(HS), err_nominal=en,
          err_effective=ee, orders_nominal=on_, orders_effective=oe)
 
@@ -155,5 +162,5 @@ ax.loglog(hh, en[0]*(hh/hh[0])**1, ":", color="0.6", lw=1, label="slope 1")
 ax.set_xlabel("mesh step h (mm)"); ax.set_ylabel("L2 error (Pa)")
 ax.set_title("Transient MMS - the wall convention sets the order")
 ax.grid(True, which="both", ls=":"); ax.legend(fontsize=8)
-fig.tight_layout(); fig.savefig("plots/mms_transient.png", dpi=110)
-print("\nFigure: plots/mms_transient.png | Data: data/mms_transient.npz")
+fig.tight_layout(); fig.savefig("figures/mms_transient.png", dpi=110)
+print("\nFigure: figures/mms_transient.png | Data: data/mms_transient.npz")

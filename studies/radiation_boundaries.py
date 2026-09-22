@@ -17,7 +17,7 @@ reference:
 
 Part B -- the resonator.  The full open-neck resonator is run with each
 termination, and f0 and Q are extracted from the free decay exactly as
-convergence_f0.py does. If a termination is sound, Q must stop moving when the
+verification/grid_convergence.py does. If a termination is sound, Q must stop moving when the
 exterior domain is enlarged. Only the PML does: it drifts 1.8 % where the
 sponge drifts 27 % and the first-order ABC 34 %.
 
@@ -55,12 +55,20 @@ PML      the unsplit second-order formulation, with two auxiliary fields:
          4.0 % (-28 dB), and neither a stronger sigma nor a thicker layer
          improves that. The floor is the geometry, not the implementation.
 
-Output: data/pml_study.npz, plots/pml_study.png
+Output: data/pml_study.npz, figures/pml_study.png
 Env: PML_H (mm, 1.0)  PML_LSP (m, 0.03)  PML_SKIP_B (0/1)  PML_SKIP_C (0/1)
 Runtime: Part A about a minute; Parts B and C are hours -- set PML_SKIP_C=1
 for the short form.
 """
+
 import os
+import sys
+
+# every path in this file is relative to the repository root
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(ROOT)
+sys.path.insert(0, ROOT)
+
 import time
 
 import numpy as np
@@ -68,9 +76,6 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-os.chdir(HERE)
 
 C = 343.0
 R_NECK, R_CAV, L_NECK, H_CAV = 0.01, 0.04, 0.04, 0.08
@@ -95,7 +100,7 @@ class Box:
         RR, ZZ = np.meshgrid(r, z, indexing="ij")
         self.RR, self.ZZ = RR, ZZ
 
-        # --- masked flux machinery (identical to fdm_open_resonator.py) ---
+        # --- masked flux machinery (identical to src/transient_solver.py) ---
         self.in_rp = np.zeros_like(dom); self.in_rp[:-1, :] = dom[1:, :] & dom[:-1, :]
         self.in_rm = np.zeros_like(dom); self.in_rm[1:, :] = dom[:-1, :] & dom[1:, :]
         self.in_zp = np.zeros_like(dom); self.in_zp[:, :-1] = dom[:, 1:] & dom[:, :-1]
@@ -268,7 +273,6 @@ def _reflection(absorber, **kw):
     return t, p
 
 
-
 def _probe_run(absorber, r_ext, z_ext, kill_r=False, kill_z=False,
                sigma_scale=12.0, t_end=T_END):
     """One reflection run with either absorbing direction disabled."""
@@ -428,7 +432,7 @@ def resonator(absorber, z_ext=0.10, r_ext=0.12, t_end=0.18):
 
 
 def fit_ringdown(t, p, t_free=0.045):
-    """f0 and Q from the free decay, as convergence_f0.py does."""
+    """f0 and Q from the free decay, as verification/grid_convergence.py does."""
     from scipy.optimize import curve_fit
     m = t >= t_free
     tt, pp = t[m] - t[m][0], p[m]
@@ -485,7 +489,6 @@ def part_b():
                   f"({(qs[1] / qs[0] - 1) * 100:+6.1f} %)   "
                   f"f0 {f0s[0]:.2f} -> {f0s[1]:.2f} ({(f0s[1] / f0s[0] - 1) * 100:+.2f} %)")
     return rows
-
 
 
 # ==========================================================================
@@ -594,14 +597,14 @@ def figure(res_a, rows_b, rows_c=()):
         ax[2].grid(ls=":", alpha=0.6, axis="y")
 
     fig.tight_layout()
-    fig.savefig("plots/pml_study.png", dpi=140)
+    fig.savefig("figures/pml_study.png", dpi=140)
     plt.close(fig)
-    print("\nFigure: plots/pml_study.png")
+    print("\nFigure: figures/pml_study.png")
 
 
 if __name__ == "__main__":
     os.makedirs("data", exist_ok=True)
-    os.makedirs("plots", exist_ok=True)
+    os.makedirs("figures", exist_ok=True)
     res_a = part_a()
     rows_b = [] if os.environ.get("PML_SKIP_B") == "1" else part_b()
     rows_c = [] if os.environ.get("PML_SKIP_C") == "1" else part_c()
