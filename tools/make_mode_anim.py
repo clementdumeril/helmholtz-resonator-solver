@@ -13,19 +13,25 @@ The right-hand panel shows the very signature of a mass-spring resonator: the
 cavity pressure and the neck velocity are in QUADRATURE, 90 degrees apart. The
 cavity is the spring, the plug of air in the neck is the mass.
 
-Output: plots/helmholtz_mode.gif, data/helmholtz_mode.npz
+Output: figures/helmholtz_mode.gif, data/helmholtz_mode.npz
 Env: MA_F (frequency, 209.84) MA_H (step in mm, 0.5) MA_FRAMES (72) MA_PERIODS (2)
 """
+
 import os
+import sys
+
+# every path in this file is relative to the repository root
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(ROOT)
+sys.path.insert(0, ROOT)
+
 import numpy as np
-import scipy.sparse as sp
-from scipy.sparse.linalg import spsolve
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
 from matplotlib.gridspec import GridSpec
 
-HERE = os.path.dirname(os.path.abspath(__file__)); os.chdir(HERE)
+from src.harmonic_solver import HarmonicSolver
 
 C, RHO = 343.0, 1.204
 R_NECK, R_CAV, L_NECK, H_CAV = 0.01, 0.04, 0.04, 0.08
@@ -34,55 +40,12 @@ FREQ = float(os.environ.get("MA_F", 209.84))
 H = float(os.environ.get("MA_H", 0.5))*1e-3
 NFR = int(os.environ.get("MA_FRAMES", 72))
 NPER = float(os.environ.get("MA_PERIODS", 2))
-W = 2*np.pi*FREQ; K2 = (W/C)**2
-SRC_Z, SRC_W, SRC_A = L_NECK + 0.5*H_CAV, 0.01, 1.0e4
-ka = W/C*R_NECK
-Zr = RHO*C*(0.5*ka**2 + 1j*(8/(3*np.pi))*ka)
-ALPHA = 1j*W*RHO/Zr
+W = 2*np.pi*FREQ
 
 
-def solve(h):
-    Nr = int(round(R_CAV/h))+1; Nz = int(round(Z_TOP/h))+1
-    r = np.arange(Nr)*h; z = np.arange(Nz)*h
-    RR, ZZ = np.meshgrid(r, z, indexing="ij")
-    fl = ((ZZ < L_NECK-1e-12) & (RR <= R_NECK+1e-12)) | ((ZZ >= L_NECK-1e-12) & (RR <= R_CAV+1e-12))
-    mo = fl & (np.abs(ZZ) < 1e-12) & (RR <= R_NECK+1e-12)
-    idx = lambda i, j: i + j*Nr
-    N = Nr*Nz; ih2 = 1.0/h**2
-    rows, cols, dat = [], [], []; b = np.zeros(N, complex)
-    F = SRC_A*np.exp(-(RR**2 + (ZZ-SRC_Z)**2)/(2*SRC_W**2))
-    for i in range(Nr):
-        for j in range(Nz):
-            ci = idx(i, j)
-            if not fl[i, j]:
-                rows += [ci]; cols += [ci]; dat += [1.0]; continue
-            diag = K2 + 0j
-            if i == 0:
-                diag += -4*ih2; rows += [ci]; cols += [idx(1, j)]; dat += [4*ih2]
-            else:
-                lc = ih2*(1-0.5/i); rc = ih2*(1+0.5/i); diag += -2*ih2
-                if fl[i-1, j]: rows += [ci]; cols += [idx(i-1, j)]; dat += [lc]
-                else:          diag += lc
-                if i+1 < Nr and fl[i+1, j]: rows += [ci]; cols += [idx(i+1, j)]; dat += [rc]
-                else:                        diag += rc
-            if mo[i, j]:
-                diag += -2*ih2 - 2*ALPHA/h
-                rows += [ci]; cols += [idx(i, j+1)]; dat += [2*ih2]
-            else:
-                diag += -2*ih2
-                for jj in (j-1, j+1):
-                    if 0 <= jj < Nz and fl[i, jj]:
-                        rows += [ci]; cols += [idx(i, jj)]; dat += [ih2]
-                    else:
-                        diag += ih2
-            rows += [ci]; cols += [ci]; dat += [diag]
-            b[ci] = -F[i, j]
-    A = sp.coo_matrix((dat, (rows, cols)), shape=(N, N), dtype=complex).tocsr()
-    P = spsolve(A, b).reshape((Nz, Nr)).T
-    return r, z, fl, np.where(fl, P, np.nan)
-
-
-r, z, fl, P = solve(H)
+SOLVER = HarmonicSolver(h=H)
+r, z, fl = SOLVER.r, SOLVER.z, SOLVER.fluid
+P = np.where(fl, SOLVER.solve(FREQ), np.nan)
 # normalisation: cavity amplitude = 1 Pa (the system is linear)
 j_cav = int(round(0.08/H)); P = P/abs(P[0, j_cav])
 print(f"f = {FREQ} Hz | grid {fl.shape} | {fl.sum()} nodes")
@@ -147,7 +110,7 @@ def update(k):
     return qm, cur, sup
 
 anim = FuncAnimation(fig, update, frames=NFR, blit=False)
-out = "plots/helmholtz_mode.gif"
+out = "figures/helmholtz_mode.gif"
 anim.save(out, writer=PillowWriter(fps=18))
 from PIL import Image, ImageSequence
 im = Image.open(out)

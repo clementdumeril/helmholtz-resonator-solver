@@ -27,8 +27,8 @@ alone, with no adjustable parameter:
 
 Usage
 -----
-    python analyze_recording.py rec1.wav [rec2.wav ...] [options]
-    python analyze_recording.py --self-test
+    python experiments/ringdown_analysis.py rec1.wav [rec2.wav ...] [options]
+    python experiments/ringdown_analysis.py --self-test
 
 Geometry, in millimetres and millilitres (caliper and kitchen scale):
     --neck-radius 10.5 --neck-length 25 --volume 500 [--protruding]
@@ -40,14 +40,21 @@ before any bottle is recorded.
 Dependencies: numpy, scipy, matplotlib. No audio library: WAV is read by
 scipy.io.wavfile, so convert M4A/MP3 to WAV first (for instance with ffmpeg).
 
-Outputs: data/experiment_<tag>.npz, plots/experiment_<tag>_<file>.png
+Outputs: data/experiment_<tag>.npz, figures/experiment_<tag>_<file>.png
 """
+
 from __future__ import annotations
+
+import os
+import sys
+
+# every path in this file is relative to the repository root
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(ROOT)
+sys.path.insert(0, ROOT)
 
 import argparse
 import json
-import os
-import sys
 
 import numpy as np
 from scipy.io import wavfile
@@ -56,9 +63,6 @@ from scipy.signal import butter, hilbert, sosfiltfilt
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-os.chdir(HERE)
 
 # --------------------------------------------------------------------------
 # Air properties
@@ -258,7 +262,7 @@ def analyse(sig, rate, pred, label, rel_bandwidth=0.20, plot=True):
 
 
 def _figure(sig, rate, i0, i1, freq, spec, f0, qres, pred, label):
-    os.makedirs("plots", exist_ok=True)
+    os.makedirs("figures", exist_ok=True)
     t = np.arange(len(sig)) / rate
     fig, ax = plt.subplots(1, 3, figsize=(13, 3.6))
 
@@ -293,7 +297,7 @@ def _figure(sig, rate, i0, i1, freq, spec, f0, qres, pred, label):
         a.grid(ls=":", alpha=0.6)
     fig.suptitle("Helmholtz ring-down -- " + label, fontsize=11)
     fig.tight_layout()
-    path = "plots/experiment_{}.png".format(label)
+    path = "figures/experiment_{}.png".format(label)
     fig.savefig(path, dpi=130)
     plt.close(fig)
     print("  figure -> " + path)

@@ -2,22 +2,28 @@
 Animation: wave propagation, entry through the neck, BUILD-UP and RESONANCE in
 an open-neck Helmholtz resonator with a meshed exterior domain.
 
-Reads data/open_resonator_anim.npz (produced by fdm_open_resonator.py) and
-renders plots/helmholtz_resonance.gif:
+Reads data/open_resonator_anim.npz (produced by src/transient_solver.py) and
+renders figures/helmholtz_resonance.gif:
   * top panel    : mirrored meridian section of the pressure field, exterior included;
   * bottom panel : exterior and cavity probe signals, with a time cursor.
 
 The field is rescaled (the system is linear) so that the INCIDENT PEAK is 1 Pa.
 """
+
 import os
+import sys
+
+# every path in this file is relative to the repository root
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(ROOT)
+sys.path.insert(0, ROOT)
+
 import numpy as np
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
 from matplotlib.gridspec import GridSpec
 from matplotlib.patches import Rectangle
-
-HERE = os.path.dirname(os.path.abspath(__file__)); os.chdir(HERE)
 d = np.load("data/open_resonator_anim.npz")
 r, z, dom = d["r"], d["z"], d["dom"]
 frames, ft = d["frames"], d["frame_t"]
@@ -89,7 +95,7 @@ def update(k):
     return qm, cur, sup
 
 anim = FuncAnimation(fig, update, frames=len(idx), blit=False)
-out = "plots/helmholtz_resonance.gif"
+out = "figures/helmholtz_resonance.gif"
 anim.save(out, writer=PillowWriter(fps=20))
 
 # --- shrink the GIF with a reduced palette ---

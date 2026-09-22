@@ -1,346 +1,261 @@
-# Helmholtz resonator — a verified finite-difference study
+# Verified Finite-Difference Modelling of an Open Helmholtz Resonator
 
-A numerical study of an axisymmetric Helmholtz resonator, built around a rule the whole repository
-follows: **no number is reported without the verification that bounds its error.** Two independent
-finite-difference solvers are written, verified against manufactured solutions, converged on
-successive grids, extrapolated to zero mesh size, cross-validated against each other and against
-published measurements — and where they disagree, the disagreement is stated rather than averaged
-away.
+**Can a finite-difference model of an open Helmholtz resonator predict its natural frequency with
+quantified numerical uncertainty?**
 
-| # | Question | Method | Verified result |
-|---|---|---|---|
-| **1** | Where is the resonance, and what sets it? | harmonic FDM, `etude_helmholtz.ipynb` | full V&V: MMS order **2.03**, GCI **≈ 2 %**, validation against Selamet *et al.* to **0.9 % / 2.2 %** |
-| **2** | What does the resonance look like **in real time**? | transient FDM with an open neck and a meshed exterior, `resonance_transitoire.ipynb` | **f₀ = 204.6 Hz** extrapolated (GCI 1.5 %), within **0.47 %** of the corrected formula |
-| **3** | Does a real bottle agree? | ring-down measurement, `analyze_recording.py` | protocol and analysis chain in place and self-verified; awaiting a recording |
-| **4** | Would a neural solver do better? | basis benchmark against the verified field, `bench_bases.py` | no: every family represents the field to 0.4 % and **none** represents its Laplacian |
-| **5** | Why was the damping never converged? | sponge / ABC / PML compared, `pml_study.py` | the sponge reflects **44 %**; with a PML the two radiation models stop disagreeing |
+Two independent solvers, code verification by manufactured solutions, grid-convergence uncertainty,
+and validation against published measurements.
 
-![Helmholtz resonance — open neck](plots/helmholtz_resonance.gif)
+```
+                          HELMHOLTZ RESONATOR
+                          axisymmetric geometry
+                                    │
+               ┌────────────────────┴────────────────────┐
+               │                                         │
+               ▼                                         ▼
+       HARMONIC SOLVER                          TRANSIENT SOLVER
+       ∇²p + k²p = −F                           ∂²p/∂t² = c²∇²p + F
+       radiation impedance at the mouth         meshed exterior, open neck
+               │                                         │
+               ▼                                         ▼
+       frequency sweep, 1–1000 Hz               broadband Ricker pulse
+               │                                         │
+               └────────────────────┬────────────────────┘
+                                    │
+                                    ▼
+                         RESONANCE FREQUENCY
+                              f₀ ≈ 204 Hz
+                                    │
+             ┌──────────────────────┼──────────────────────┐
+             ▼                      ▼                      ▼
+     CODE VERIFICATION      SOLUTION VERIFICATION    MODEL VALIDATION
+     manufactured           Richardson + GCI         Selamet et al.
+     solutions, p ≈ 2       uncertainty ≈ 2 %        published data
+             └──────────────────────┼──────────────────────┘
+                                    ▼
+                            VERIFIED RESULT
+                       204.6 Hz ± 1.5 %, two solvers
+```
 
-*The pulse propagates, enters through the neck, the cavity fills — then the pulse leaves and the
-cavity **rings on its own** at its natural frequency. Part 2.*
+![Helmholtz resonance — open neck](figures/helmholtz_resonance.gif)
 
-## Getting started
+*A broadband pulse propagates, enters through the neck, the cavity fills — then the pulse leaves and
+the cavity **rings on its own** at its natural frequency. No frequency is imposed anywhere.*
+
+| | |
+|---|---|
+| **204.6 Hz** | extrapolated resonance frequency |
+| **1.5 %** | grid-convergence uncertainty (GCI) |
+| **0.61 %** | difference between two independent solvers |
+| **0.9 – 2.2 %** | deviation from published measurements, no fitted parameter |
+
+---
+
+## The verification and validation ladder
+
+This is the argument of the repository. Each rung answers a different question, and they only mean
+something in this order.
+
+| Stage | Question | Evidence |
+|---|---|---|
+| **Code verification** | Did I solve the PDE correctly? | manufactured solutions, observed order **2.03** (harmonic) and **1.98** (transient) |
+| **Solution verification** | Is the mesh resolved enough? | Richardson extrapolation + GCI on three grids, plus a fourth control grid — uncertainty **≈ 2 %** |
+| **Cross-validation** | Does an independent solver agree? | **203.35** vs **204.60 Hz**, uncertainty intervals overlapping |
+| **Model validation** | Does it match reality? | Selamet *et al.* (1997), **0.9 %** and **2.2 %**, no adjusted parameter |
+
+The corrected Helmholtz theory, 205.56 Hz, falls inside both solvers' intervals.
+
+## Key numerical findings
+
+**Mesh bias matters, and it hid behind a coincidence.** The solver places its walls half a cell
+beyond the last node, so the geometry actually simulated is `R + h/2`: a first-order geometric
+error. The raw frequency at h = 1 mm, 209.8 Hz, appeared to agree remarkably with the harmonic
+calculation at 209.84 Hz. That agreement was an artefact of the bias. Extrapolated to zero mesh the
+transient result is **204.6 Hz**, within 0.47 % of theory — a weaker-looking number that is this
+time *controlled* and carries an uncertainty.
+
+**Frequency is robust; damping is not.** f₀ moves by less than 0.14 % under any change of outer
+boundary treatment, mesh size or absorbing layer. The radiation Q moved by a **factor of six** under
+the same changes — until the cause was found: the absorbing layer reflected 44 % of the incident
+amplitude. With a perfectly matched layer, Q settles.
+
+**Two independent solvers agree.** A harmonic solver with an analytic radiation impedance and a
+transient solver with a meshed exterior — different discretisations, different radiation models —
+extrapolate to 203.35 and 204.60 Hz, differing by 0.61 %, well inside both uncertainty bars.
+
+---
+
+## 1 — The physical problem
+
+A neck of length *L* and cross-section *S* = π*a*² on a rigid cavity of volume *V*: the plug of air
+in the neck is the mass, the air in the cavity is the spring. The lossless lumped frequency, with an
+end correction Δ*L* for the air that spills out at both ends, is
+
+    f₀ = (c / 2π) · √( S / (V (L + ΔL)) )
+
+The reference geometry is axisymmetric: neck radius 1 cm and length 4 cm, cavity radius 4 cm and
+height 8 cm. Everything in this repository is a way of computing that frequency without assuming
+Δ*L*, and of bounding the error on the answer.
+
+## 2 — Numerical methods
+
+Both solvers work on the meridian plane (r, z), where the term (1/r)·∂p/∂r is 0/0 on the axis;
+L'Hôpital's rule turns it into ∂²p/∂r², so the Laplacian there is 2∂²p/∂r² + ∂²p/∂z².
+
+**Harmonic** — [`src/harmonic_solver.py`](src/harmonic_solver.py). Sparse assembly of
+∇²p + k²p = −F, rigid walls by folding the ghost node onto the diagonal, and a Robin condition at
+the mouth carrying the low-frequency radiation impedance of a baffled piston. One complete linear
+solve per frequency.
+
+**Transient** — [`src/transient_solver.py`](src/transient_solver.py). Explicit leapfrog on the wave
+equation, axisymmetric Laplacian in masked finite volumes, and a genuinely **open** neck onto a
+meshed exterior half-space. Excited by a broadband Ricker pulse, so the resonator *selects* its own
+frequency rather than being told one.
+
+## 3 — Verification and validation
+
+**Code verification.** On a smooth domain with a manufactured solution, the harmonic scheme converges
+at order **2.03** over four grids. The transient scheme is verified separately by a space-time
+manufactured solution at order **1.98** — and that test is what revealed the half-cell wall
+convention, because matching the manufactured solution to the nominal geometry gives order 1 and
+matching it to `R + h/2` restores order 2 with errors 27 times smaller.
+
+**Solution verification.** f₀ on three grids (2 / 1 / 0.5 mm) for five neck lengths, with Richardson
+extrapolation and Roache's GCI, plus a fourth control grid at 0.25 mm confirming the extrapolations
+are stable to 0.2–0.4 %. Observed order ≈ 0.92, degraded towards 1 by the staircase geometry; the
+numerical uncertainty is about 2 %.
+
+**Model validation.** Two published configurations of Selamet *et al.* (1997) — a geometry four times
+larger than the study's own — reproduced to **0.9 %** and **2.2 %** with no fitted parameter.
+
+## 4 — Main physical results
+
+**The end correction, computed rather than assumed.** The meshed exterior produces Δ*L* instead of
+postulating it. Identified from the raw h = 1 mm frequency it comes out at 1.29 *a*, 15 % short of
+the expected 1.51 *a* — and one might conclude the exterior mesh underestimates the radiation load.
+Identified from the frequency extrapolated to zero mesh it is **1.56 *a***, within 3 %. The apparent
+shortfall was the mesh bias, not physics.
+
+**The scaling law.** Fitted on the extrapolated frequencies and weighted by the GCI, a power law and
+the physical effective-length model are statistically indistinguishable (ΔAICc not decisive). The
+physical model is preferred on three converging grounds: its constant A_H ≈ 48 matches theory, its
+Δ*L*_eff ≈ 0.67 *a* matches Rayleigh–Ingard, and its leave-one-out prediction is ten times better.
+The apparent exponent *b* ≈ −0.42 is an artefact of the restricted range of neck lengths.
+
+**The sweep, and a peak that was not resolved.** A thousand harmonic solves from 1 to 1000 Hz take
+77 seconds, against the 7 to 17 hours the same band would cost in the time domain. At a 1 Hz step
+the peak read 209.95 Hz and 6 622 Pa; at 0.005 Hz it reads 209.84 Hz and **7 251 Pa**. The first
+pass underestimated the peak by 9 %, because the −3 dB bandwidth is 0.73 Hz — *narrower than the
+sampling step*.
+
+![Frequency sweep](figures/fdm_sweep.png)
+
+![Resonant mode](figures/helmholtz_mode.gif)
+
+*Quadrature measured at **+90.2°** between neck velocity and cavity pressure — the signature of a
+mass-spring system.*
+
+## 5 — Why the radiation damping is harder
+
+Everything above concerns a frequency, and frequencies behave. The damping did not: it moved by a
+factor of six with purely numerical settings. [`studies/radiation_boundaries.py`](studies/radiation_boundaries.py)
+implements three outer-boundary treatments in one solver and measures them, comparing each against
+the same run on a domain four times larger where nothing can reflect back in time.
+
+| termination | spurious reflection | Q drift, 10 → 18 cm |
+|---|---|---|
+| sponge layer (what the solver used) | **44 %** | +26.8 % |
+| first-order ABC (Mur) | 5.6 % | +33.5 % |
+| **PML** | **4.0 %** | **−1.8 %** |
+
+The sponge sends back nearly half the incident amplitude. That single number is the factor of six.
+
+The PML floors at −28 dB, and running each wall alone shows why: **0.093 % (−61 dB) on the flat
+boundary**, where the Cartesian complex stretch is exact, against **4.03 % (−28 dB) on the curved
+one**, where the 1/r term is omitted. The implementation reaches textbook performance on a plane;
+the floor is the cost of a Cartesian stretch on a cylinder.
+
+**And holding still between 10 and 18 cm is not convergence.** At 209 Hz the wavelength is 1.64 m, so
+a 10 cm exterior is 0.06 of one — the PML sits inside the reactive near field of the mouth.
+Enlarging it properly:
+
+| exterior | in wavelengths | radiation Q |
+|---|---|---|
+| 10 cm | 0.061 | 98.1 |
+| 18 cm | 0.110 | 116.6 |
+| 30 cm | 0.183 | 187.2 |
+| **45 cm** | **0.274** | **269.6** |
+
+![Outer-boundary treatments](figures/pml_study.png)
+
+Q climbs to meet the **285.6** of the analytic radiation impedance. The factor-2.7 disagreement this
+project used to report between its two radiation models was never physics — it was a domain one
+sixteenth of a wavelength across. Meanwhile f₀ stays within 0.1 % across a 4.5-fold enlargement.
+
+*Still open:* the largest run is 0.27 wavelengths with Q at 270 against 286, which is consistent with
+converging there but does not demonstrate it.
+
+## 6 — Extensions and negative results
+
+**Physical validation, pending a recording.** [`experiments/protocol.md`](experiments/protocol.md)
+sets out a ring-down measurement needing a bottle, a phone and an afternoon, and
+[`experiments/ringdown_analysis.py`](experiments/ringdown_analysis.py) performs the analysis — FFT
+with parabolic peak interpolation for f₀, then a band-pass, Hilbert envelope and logarithmic
+decrement for Q, *the same estimator the transient solver uses*. The chain is verified before any
+bottle is recorded (`--self-test`): it recovers synthetic decays to 0.007 % on f₀ and 4.4 % on Q
+across 128–480 Hz, and its lumped predictions land within 0.06 % of theory and 2.5 % of the harmonic
+sweep. This matters because radiation is the *smaller* loss — the neck's viscothermal friction is
+estimated at Q ≈ 47, three times stronger, and no solver here resolves it.
+
+**Neural PDE solvers: a measured negative result.** Having a verified reference makes it possible to
+test the usual claim — that physics-informed networks underperform on wave problems because of
+spectral bias, curable with a better basis. [`studies/neural_basis_benchmark.py`](studies/neural_basis_benchmark.py)
+measures, without any training, the best possible projection of the FDM field onto each basis *and*
+the PDE residual of that same best-possible field. tanh, SIREN, Gabor atoms and domain decomposition
+all represent the field to better than 0.4 %; all leave a residual in the hundreds of thousands of
+percent, where 100 % is exactly as bad as the zero field. The best, Gabor, is 2 536 times worse than
+writing down zero. The obstacle is not capacity: the Laplacian amplifies representation error by
+1/L² = 625, and the solution lives on a near-cancellation between two large terms.
+
+![Neural bases](figures/bench_bases.png)
+
+## 7 — Reproducing
 
 ```bash
 pip install -r requirements.txt
-jupyter lab etude_helmholtz.ipynb          # part 1 — harmonic FDM, V&V
-jupyter lab resonance_transitoire.ipynb    # part 2 — transient resonance
-python analyze_recording.py --self-test    # part 3 — verify the measurement chain
+
+jupyter lab notebooks/harmonic_study.ipynb      # the harmonic study, self-contained
+jupyter lab notebooks/transient_study.ipynb     # the transient study
+
+python src/transient_solver.py                  # transient resonance (~6 min)
+python studies/frequency_sweep.py               # 1–1000 Hz sweep (77 s)
+python verification/mms_transient.py            # code verification of the transient scheme
+python verification/grid_convergence.py         # mesh convergence and extrapolation of f0
+python experiments/ringdown_analysis.py --self-test
+python studies/neural_basis_benchmark.py        # no training (~2 min)
+python studies/radiation_boundaries.py          # long; PML_SKIP_C=1 for the short form
 ```
 
 The notebooks ship **with their outputs**, so every figure is visible without running anything.
 
----
-
-## Part 1 — Harmonic FDM: verification, validation, effective length
-
-The complex pressure obeys the Helmholtz equation in axisymmetric cylindrical coordinates, with
-the singularity at r = 0 removed by L'Hôpital's rule. Verification proceeds on three distinct
-levels, in the order that makes each one meaningful:
-
-| Level | Question | Method | Result |
-|---|---|---|---|
-| **Code** | is the scheme correctly programmed? | manufactured solution (MMS) | order **2.03** |
-| **Solution** | is the mesh error bounded? | GCI convergence (Roache) + a 4th control grid | uncertainty **≈ 2 %** |
-| **Model** | does it reproduce reality? | published measurements (Selamet *et al.*, 1997) | deviations **0.9 % / 2.2 %** |
-
-- **Scaling law.** Once the numerical uncertainty is propagated, a power law and the
-  effective-length model are statistically indistinguishable (ΔAICc not decisive). The physical
-  model `f₀ = A_H/√(L+ΔL_eff)` is nevertheless preferred: **A_H ≈ 48** matches the theoretical
-  constant, **ΔL_eff ≈ 0.67 R_neck** matches the Rayleigh–Ingard correction, and its
-  leave-one-out prediction is ten times better. The apparent exponent *b ≈ −0.42* is an artefact
-  of the restricted range of neck lengths.
-- **End correction** decomposed into interior and exterior contributions through a radiation
-  impedance condition — as a consistency test of the Robin implementation, not an *ab initio*
-  calculation. Part 2 performs the *ab initio* version.
-- **Losses** dominated by the neck boundary layer (**Q ≈ 47**); bulk absorption negligible.
-
-## Part 2 — Transient resonance, open neck, meshed exterior
-
-The neck is **genuinely open** onto a meshed exterior half-space (flat baffle, absorbing layers)
-and excited by a **broadband pulse**. The resonator **selects** its own frequency: after the pulse
-has passed, the cavity keeps oscillating. The exterior mesh **computes** the end correction
-instead of postulating it — the first perspective of Part 1, now carried out.
-
-| Quantity | Measured | Reference | Deviation |
-|---|---|---|---|
-| f₀ **extrapolated to zero mesh size** | **204.6 Hz** (GCI 1.5 %) | Helmholtz **with** end corrections: 205.6 Hz | **0.47 %** |
-| — | — | Helmholtz **without** correction: 241.3 Hz | 15 % |
-| Observed order of convergence | 0.86 | three grids: 2 / 1 / 0.5 mm | — |
-| Q by radiation | **not measurable with this termination** | varies by a factor of 6 with the boundary treatment | resolved in Part 5 |
-
-**A verification added afterwards, which corrected two announced results.** The solver places its
-walls half a cell beyond the last node, so the geometry actually simulated is `R+h/2` and `H+h`,
-biasing f₀ at first order. Three consequences:
-
-- the raw frequency at h = 1 mm (209.8 Hz) appeared to coincide with the harmonic impedance
-  calculation (209.84 Hz); that coincidence was **fortuitous**, an artefact of the mesh bias;
-- once extrapolated, f₀ = **204.6 Hz**, within 0.47 % of the corrected theory — weaker agreement
-  on its face, but this time **controlled** and carrying an uncertainty;
-- f₀ is **perfectly robust** to the boundary treatment (0.00 % variation), whereas **Q varies by a
-  factor of 6**: with these absorbing layers the calculation measures a natural frequency, not a
-  damping. Part 5 finds the cause and removes it.
-
-Code verification: `mms_transient.py` (space-time manufactured solution, **order 1.98**), which
-exercises the mask, the zero fluxes and the axis — none of which the Part 1 MMS covered.
-
-### Full frequency sweep — `fdm_sweep.py`
-
-A thousand harmonic solves from **1 to 1000 Hz in 77 seconds**, with a radiation impedance at the
-mouth. Compare with the 7 to 17 hours an equivalent transient sweep would have cost: 10 s of
-signal at `dt_CFL = 0.825 µs` is **1.21 × 10⁷ time steps**.
-
-| Quantity | 1 Hz step | 0.005 Hz step |
-|---|---|---|
-| Resonance peak | 209.95 Hz | **209.84 Hz** |
-| Amplitude at the peak | 6 622 Pa | **7 251 Pa** |
-| −3 dB bandwidth | 0.96 Hz | 0.73 Hz |
-| Quality factor Q | 218.6 | 285.6 |
-| Gain over the 1 Hz sweep | **255×** | — |
-
-> **The first pass underestimated the peak by 9 %.** The −3 dB bandwidth is 0.73 Hz, **narrower
-> than the 1 Hz sampling step**: the peak was simply not resolved.
-
-![Frequency sweep](plots/fdm_sweep.png)
-
-### Cross-validation of the two solvers
-
-Both solvers were extrapolated to zero mesh size by Richardson's method.
-
-| Quantity | Harmonic solver | Transient solver |
-|---|---|---|
-| Observed order | **0.933** | **0.863** |
-| Extrapolated f₀ | **203.35 Hz** | **204.60 Hz** |
-| GCI | 2.05 % | 1.54 % |
-| Interval | 199.2 – 207.5 Hz | 201.4 – 207.8 Hz |
-
-The two extrapolations differ by **0.61 %**, comfortably inside the uncertainty bars, and the
-**corrected Helmholtz theory (205.56 Hz) falls inside both intervals**. Two independent solvers,
-two different radiation models, one answer: a **controlled** cross-validation rather than a
-fortunate one.
-
-Both observed orders are near 0.9 rather than 2, because the half-cell bias is present in **both**
-solvers. **Q, by contrast, appeared to differ by a factor of 2.7** between the radiation models —
-285.6 from the analytic impedance against 105 from the meshed exterior. That disagreement turned
-out to be numerical, not physical, and Part 5 takes it apart.
-
-### Animation of the established mode — `make_mode_anim.py`
-
-![Resonant mode](plots/helmholtz_mode.gif)
-
-*Quadrature measured at **+90.2°** between the neck velocity and the cavity pressure — the
-signature of a mass-spring system: the plug of air in the neck is the mass, the air in the cavity
-is the spring.*
-
-## Part 3 — Closing the loop: measuring a real resonator
-
-Everything above is computation. Part 5 reconciles the two computed radiation Q's with each other,
-but both describe radiation alone — and a real resonator is dominated by something neither solver
-resolves: viscothermal friction in the neck, estimated at Q ≈ 47 against a radiation Q near 286.
-A real bottle should therefore ring at Q ≈ 40, and only a measurement can confirm that.
-
-[`docs/EXPERIMENTAL_PROTOCOL.md`](docs/EXPERIMENTAL_PROTOCOL.md) sets out a measurement that needs
-a bottle, a phone and an afternoon, and [`analyze_recording.py`](analyze_recording.py) performs the
-analysis: FFT with parabolic peak interpolation for f₀, then a band-pass, a Hilbert envelope and a
-logarithmic decrement for Q — **the same estimator the transient solver uses**, so the measured and
-computed values are directly comparable rather than merely similar.
-
-The analysis chain is verified before any bottle is recorded:
-
-```bash
-python analyze_recording.py --self-test
+```
+src/          the two solvers
+verification/ manufactured solutions and grid convergence — why the code can be trusted
+studies/      secondary questions: the sweep, the outer boundary, neural bases
+experiments/  physical validation: protocol and ring-down analysis
+notebooks/    the two studies, with outputs
+tools/        figure and animation generation
+paper/        the write-up, its sources and its bibliography
+data/  figures/
 ```
 
-| Self-test | What it checks | Result |
-|---|---|---|
-| Part 1 | recovery of f₀ and Q from synthetic ring-downs of known parameters, 128–480 Hz, 25–45 dB SNR | f₀ to **0.007 %**, Q to **4.4 %** worst case |
-| Part 2 | the lumped predictions against this project's own reference geometry | f₀ to **0.06 %** of the corrected formula, Q_rad to **2.5 %** of the harmonic sweep |
+## 8 — Paper
 
-![Self-test of the ring-down estimator](plots/experiment_selftest.png)
+[`paper/paper.pdf`](paper/paper.pdf) — the full write-up of the harmonic study: formulation,
+verification, validation, scaling law, decomposition of the end correction, and the loss model.
+Rebuild it with `python tools/make_paper_figures.py` then `latexmk -pdf paper/paper.tex`.
 
-*The self-test on a synthetic decay: the analysis window on the waveform, the spectrum, and the
-log-envelope with its fit. Same three panels a real recording will produce.*
-
-That second check is worth stating plainly: a lumped radiation resistance computed from the
-geometry alone lands within 2.5 % of the 285.6 obtained by meshing the mouth and sweeping a
-thousand frequencies. The two routes are independent.
-
-## Part 4 — Why neural PDE solvers fail here, measured
-
-Physics-informed networks are the obvious thing to try on a Helmholtz problem, and the usual
-diagnosis when they underperform is spectral bias, with a better basis as the remedy: Fourier
-features, SIREN, Gabor atoms, domain decomposition. Having a *verified* reference makes it
-possible to test that diagnosis instead of assuming it.
-
-`bench_bases.py` measures two things for each family, at random initialisation, **without any
-training at all**:
-
-- the best possible least-squares fit of the FDM field onto the basis — can it represent P?
-- the PDE residual **of that same best-possible field** — does it satisfy the equation?
-
-| basis | field error | residual of that same field | κ(A_phys) |
-|---|---|---|---|
-| tanh (reference) | 0.36 % | 997 875 % | 6.8·10¹³ |
-| SIREN, ω₀ = 5 | 0.16 % | 427 910 % | 1.1·10⁴ |
-| SIREN, ω₀ = 8 | 0.26 % | 711 862 % | **5.1·10²** |
-| Gabor atoms | **0.15 %** | **253 570 %** | 2.3·10⁴ |
-| domain decomposition | 0.16 % | 425 392 % | 3.9·10³ |
-| Trefftz (Bessel) | 4.04 % | 100 % | 0 |
-
-**100 % is exactly as bad as writing down the zero field.** Every neural family represents the
-field to better than 0.4 % and every one of them leaves a residual in the hundreds of thousands of
-percent. The best, Gabor, is still 2 536 times worse than zero.
-
-![Neural bases: capacity against residual](plots/bench_bases.png)
-
-The obstacle is not capacity. In this geometry the Laplacian amplifies a representation error by
-**1/L² = 625**, and the true solution lives on a near-cancellation — ∇²P and −k²P are both enormous
-and their difference is small. Representing P to 0.15 % is nowhere near enough to represent ∇²P.
-
-What the basis *does* change is the conditioning of the system actually solved: eleven orders of
-magnitude between tanh and SIREN ω₀ = 8. That is a real result, and a real reason to prefer sine
-activations. It is simply not the binding constraint.
-
-Trefftz is the exception that proves the point. Its functions satisfy ∇²φ + k²φ = 0 exactly, so
-A_phys is identically zero: it cannot misrepresent the operator because it never approximates it —
-and for the same reason it cannot carry the source, which is why it sits at exactly 100 %. A
-Trefftz method needs a particular solution supplied separately.
-
-Two minutes on a CPU, no training, no checkpoints. The measurement is the deliverable.
-
-## Part 5 — The damping, and why it was never converged
-
-The sections above state twice that the radiation Q is not trustworthy: it moves by a factor of six
-with purely numerical settings, and the meshed exterior disagrees with the analytic radiation
-impedance by a factor of 2.7. `pml_study.py` implements three outer-boundary treatments in one
-solver and measures them, rather than arguing about them.
-
-**How much does each one reflect?** A pulse is fired into a homogeneous exterior and compared
-against the same run on a domain four times larger, where nothing can return within the window. The
-difference *is* the reflection, so no analytic reference is needed.
-
-| termination | spurious reflection |
-|---|---|
-| sponge layer (what the solver used) | **44 %** (−7 dB) |
-| first-order ABC (Mur) | 5.6 % (−25 dB) |
-| PML, same σ as the sponge | 7.1 % (−23 dB) |
-| **PML, σ tuned** | **4.0 %** (−28 dB) |
-
-The sponge sends back nearly half the incident amplitude. That single number explains the factor of
-six.
-
-On this test the first-order ABC beats an untuned PML, which is not surprising: the source sits on
-the axis, so the wavefront meets the outer boundary close to normal incidence, and Mur is exact at
-normal incidence. It is the resonator run below, where the field arrives from every angle, that
-separates them.
-
-**The PML floors at −28 dB, and the reason is geometric, not a bug.** Running each wall in isolation
-separates them:
-
-| boundary | PML reflection |
-|---|---|
-| flat (z), where the Cartesian complex stretch is exact | **0.093 %** (−61 dB) |
-| curved (r), where the 1/r term is omitted | 4.03 % (−28 dB) |
-
-A factor of 43. On a plane the implementation reaches the −61 dB expected of a textbook PML; the
-floor is entirely the cost of applying a Cartesian stretch to a cylindrical surface. A genuinely
-cylindrical PML is the fix, and this measurement is what says so.
-
-**Does the resonator's Q then settle?** Only the PML holds still:
-
-| termination | Q at Z_ext = 10 cm | at 18 cm | drift |
-|---|---|---|---|
-| sponge | 104.7 | 132.8 | +26.8 % |
-| first-order ABC | 67.5 | 90.2 | +33.5 % |
-| **PML** | 98.1 | 96.4 | **−1.8 %** |
-
-f₀ moves by at most 0.14 % for any of them — the same lesson as everywhere else in this project.
-
-*(The sponge run at 10 cm returns f₀ = 209.25 Hz and Q = 104.7, reproducing the verified solver of
-Part 2 to the hundredth of a hertz. The two codes agree.)*
-
-**But "settled between 10 and 18 cm" is not "converged".** At 209 Hz the wavelength is 1.64 m, so a
-10 cm exterior is 0.06 of one: the PML sits deep in the reactive near field of the mouth and
-truncates evanescent content a free half-space would keep. Enlarging it properly:
-
-| exterior | in wavelengths | f₀ (Hz) | radiation Q |
-|---|---|---|---|
-| 10 cm | 0.061 | 208.32 | 98.1 |
-| 18 cm | 0.110 | 208.42 | 116.6 |
-| 30 cm | 0.183 | 208.53 | 187.2 |
-| **45 cm** | **0.274** | 208.49 | **269.6** |
-
-![Outer-boundary treatments](plots/pml_study.png)
-
-Q climbs from 98 to 270 and heads straight for the **285.6** of the analytic radiation impedance —
-and for the 292.7 of the lumped baffled-piston formula, which agree with each other to 2.5 %. The
-factor-2.7 disagreement this project reported was never physics. It was a domain one sixteenth of a
-wavelength across.
-
-Meanwhile f₀ stays within 0.1 % across a 4.5-fold enlargement. Frequency robust, damping demanding:
-the same conclusion as everywhere, now with the reason attached.
-
-**What is still open.** The largest run is 0.27 wavelengths and Q is at 270 against 286. The trend is
-consistent with converging there; it is not a demonstration that it does. Showing it would need an
-exterior around half a wavelength, which at this mesh is several hours of CPU — and it would settle
-a quantity that is in any case three times smaller than the viscothermal losses of a real neck.
-Part 3 is the cheaper arbiter.
-
-## Reproducing
-
-```bash
-python fdm_open_resonator.py          # part 2: transient resonance (~6 min)
-python fdm_sweep.py                   # frequency sweep, 1–1000 Hz (77 s)
-python mms_transient.py               # code verification of the transient scheme (~10 s)
-python convergence_f0.py              # mesh convergence and extrapolation of f0
-python make_resonance_anim.py         # animation (after a run with OR_TAG=_anim, see the notebook)
-python make_mode_anim.py              # animation of the established resonant mode (~30 s)
-python analyze_recording.py --self-test   # part 3: verify the measurement chain
-python bench_bases.py                 # part 4: neural bases, no training (~2 min)
-python pml_study.py                   # part 5: sponge vs ABC vs PML (long; PML_SKIP_C=1 for the short form)
-python make_paper_figures.py          # redraw the figures of the PDF from data/
-```
-
-## Contents
-
-```
-etude_helmholtz.ipynb            part 1 — harmonic FDM, V&V, effective length
-resonance_transitoire.ipynb      part 2 — transient resonance (open neck)
-fdm_open_resonator.py            transient solver, open neck + meshed exterior
-fdm_sweep.py                     full frequency sweep with a radiation impedance
-mms_transient.py                 code verification of the transient scheme (space-time MMS)
-convergence_f0.py                mesh convergence of f0 + Richardson extrapolation
-analyze_recording.py             part 3 — ring-down analysis of a real resonator
-bench_bases.py                   part 4 — neural bases measured against the reference
-pml_study.py                     part 5 — outer-boundary treatments and the radiation Q
-make_paper_figures.py            redraws the figures of the PDF from data/
-make_resonance_anim.py           animation of the transient regime
-make_mode_anim.py                animation of the established resonant mode
-build_resonance_notebook.py      generator for the part 2 notebook
-explication_scientifique.pdf     write-up of part 1
-docs/EXPERIMENTAL_PROTOCOL.md    measurement protocol for a real resonator
-data/  plots/                    data and figures
-```
-
-## What this study does and does not establish
-
-**Established, with an error bar.** The natural frequency: two independent solvers, three levels of
-verification, agreement with published measurements without a single fitted parameter, and a
-theory that falls inside both uncertainty intervals.
-
-**Established since, in Part 5.** The radiation damping, to the extent a computation can settle it.
-The sponge layer reflected 44 % of the incident amplitude, which is what made Q move by a factor of
-six; a PML removes that, and the meshed exterior then climbs to meet the analytic radiation
-impedance as the domain grows in wavelengths. The two routes agree.
-
-**Still not established.** That the climb has actually stopped. The largest exterior run is 0.27
-wavelengths across and Q is at 270 against an analytic 286 — consistent with converging there, not
-a demonstration of it. And the whole radiation question is secondary for a real object anyway,
-since viscothermal losses in the neck are three times larger. That is what Part 3 is for.
-
-## References
-
-Helmholtz (1860) · Rayleigh (1896) · Crandall (1926) · Ingard (1953) · Morse & Ingard (1968) ·
-Bérenger (1994) · Roache (1994, 1998) · Selamet *et al.* (1997) · Peters *et al.* (2003) ·
-Moloney (2004). Full entries in [`references.bib`](references.bib).
+**References.** Helmholtz (1860) · Rayleigh (1896) · Crandall (1926) · Ingard (1953) ·
+Morse & Ingard (1968) · Bérenger (1994) · Roache (1994, 1998) · Selamet *et al.* (1997) ·
+Peters *et al.* (2003) · Moloney (2004). Full entries in
+[`paper/references.bib`](paper/references.bib).

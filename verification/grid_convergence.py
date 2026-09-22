@@ -12,21 +12,27 @@ Two improvements over the raw FFT measurement:
    which locates f0 well below the width of one FFT bin.
 
 2. EXTRAPOLATION. The solver places its walls HALF A CELL beyond the last node
-   (see mms_transient.py), so the effective geometry depends on h and biases f0
+   (see verification/mms_transient.py), so the effective geometry depends on h and biases f0
    at FIRST order. The observed order is measured on three grids and the result
    extrapolated to zero mesh size (Richardson).
 
 Inputs : data/open_resonator_h2.npz (2 mm), data/open_resonator.npz (1 mm),
          data/open_resonator_h05.npz (0.5 mm)
-Output : data/convergence_f0.npz, plots/convergence_f0.png
+Output : data/convergence_f0.npz, figures/convergence_f0.png
 """
+
 import os
+import sys
+
+# every path in this file is relative to the repository root
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(ROOT)
+sys.path.insert(0, ROOT)
+
 import numpy as np
 from scipy.optimize import curve_fit
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-
-HERE = os.path.dirname(os.path.abspath(__file__)); os.chdir(HERE)
 
 C = 343.0
 R_NECK, R_CAV, L_NECK, H_CAV = 0.01, 0.04, 0.04, 0.08
@@ -140,5 +146,5 @@ if len(hs) >= 2:
     ax.set_xlabel("mesh step h (mm)"); ax.set_ylabel("f0 (Hz)")
     ax.set_title("Mesh convergence of the natural frequency")
     ax.grid(ls=":"); ax.legend(fontsize=8)
-    fig.tight_layout(); fig.savefig("plots/convergence_f0.png", dpi=110)
-    print("\nFigure: plots/convergence_f0.png")
+    fig.tight_layout(); fig.savefig("figures/convergence_f0.png", dpi=110)
+    print("\nFigure: figures/convergence_f0.png")

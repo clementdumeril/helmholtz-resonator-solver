@@ -8,7 +8,7 @@ calculation replaces.
 within 0.6 %, and both cross-check against the corrected Helmholtz formula. The **radiation**
 damping has since been reconciled too: with a perfectly matched layer and an exterior large enough
 in wavelengths, the meshed solver climbs to meet the analytic radiation impedance near Q ≈ 286
-(`pml_study.py`).
+(`studies/radiation_boundaries.py`).
 
 That still leaves the damping of a real object unsettled, and by a wide margin. Radiation is the
 smaller loss: the viscothermal friction of the neck is estimated at Q ≈ 47, three times stronger,
@@ -16,7 +16,7 @@ and no solver in this repository resolves the sub-millimetre boundary layer that
 real bottle should ring at Q ≈ 40, dominated by a mechanism that has only ever been estimated
 here. Only a measurement closes that gap.
 
-The analysis script is [`analyze_recording.py`](../analyze_recording.py), at the repository root.
+The analysis script is [`experiments/ringdown_analysis.py`](ringdown_analysis.py).
 
 ---
 
@@ -25,7 +25,7 @@ The analysis script is [`analyze_recording.py`](../analyze_recording.py), at the
 Before recording anything, check that the estimator works:
 
 ```bash
-python analyze_recording.py --self-test
+python experiments/ringdown_analysis.py --self-test
 ```
 
 It synthesises ring-downs whose f₀ and Q are known by construction, runs the complete pipeline on
@@ -91,7 +91,7 @@ A bottle is the better object — its ring-down lasts long enough to fit cleanly
 5. Export as WAV and run:
 
 ```bash
-python analyze_recording.py rec1.wav rec2.wav rec3.wav rec4.wav rec5.wav \
+python experiments/ringdown_analysis.py rec1.wav rec2.wav rec3.wav rec4.wav rec5.wav \
     --neck-radius 9.5 --neck-length 60 --volume 750 --temperature 21 --protruding
 ```
 
@@ -106,7 +106,7 @@ python analyze_recording.py rec1.wav rec2.wav rec3.wav rec4.wav rec5.wav \
   comparable rather than merely similar.
 - A standard error on Q from the residuals of that fit, and a spread across the repeated files.
 - A three-panel figure per recording — waveform with the analysis window, spectrum, log-envelope
-  with the fit — written to `plots/`, and a summary to `data/experiment_<tag>.npz`.
+  with the fit — written to `figures/`, and a summary to `data/experiment_<tag>.npz`.
 
 It warns if the measured Q approaches the band-pass filter's own Q, which would mean the decay
 being measured is partly the filter's.

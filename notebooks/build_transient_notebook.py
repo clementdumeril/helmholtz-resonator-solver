@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Build resonance_transitoire.ipynb (open-neck FDM with a meshed exterior)."""
+"""Build notebooks/transient_study.ipynb (open-neck FDM with a meshed exterior)."""
 import nbformat as nbf
 from nbformat.v4 import new_notebook, new_markdown_cell, new_code_cell
 
@@ -76,7 +76,7 @@ flux towards an out-of-domain cell gives an exact Neumann condition -- the baffl
 neck/cavity step included. Excitation: a **Ricker pulse**, broadband and centred at 250 Hz,
 emitted by a small source placed in the exterior. *No frequency is imposed on the resonator.*
 
-*(Full code: `fdm_open_resonator.py`.)*
+*(Full code: `src/transient_solver.py`.)*
 """)
 
 co(r"""# Field snapshots: propagation, entry through the neck, build-up of the resonance
@@ -129,12 +129,12 @@ fig.tight_layout(); plt.show()
 
 md(r"""### Animation
 
-![Helmholtz resonance - open neck](plots/helmholtz_resonance.gif)
+![Helmholtz resonance - open neck](figures/helmholtz_resonance.gif)
 
 *To reproduce the animation:*
 ```bash
-OR_TMS=120 OR_NFRAMES=420 OR_TAG=_anim python fdm_open_resonator.py
-python make_resonance_anim.py
+OR_TMS=120 OR_NFRAMES=420 OR_TAG=_anim python src/transient_solver.py
+python tools/make_resonance_anim.py
 ```
 """)
 
@@ -181,7 +181,7 @@ $Q_{\text{visc}}\approx47$, which **dominate**: a real resonator would have
 $Q^{-1}=Q_{\text{rad}}^{-1}+Q_{\text{visc}}^{-1}$, so $Q\approx32$ -- it would ring more briefly
 than this animation suggests. Section 5 shows that the radiation $Q$ computed here is not in fact
 converged, which is the reason the project carries an experimental protocol
-(`docs/EXPERIMENTAL_PROTOCOL.md`) to settle the damping by measurement.
+(`experiments/protocol.md`) to settle the damping by measurement.
 """)
 
 co(r"""Q_visc = 47.0
@@ -212,7 +212,7 @@ print(f"deviation              : {abs(float(cv['f_ext'])-float(cv['f_theo']))/fl
 """)
 
 md(r"""The frequency **drifts with the mesh**, and this is not noise: the solver places its walls half
-a cell beyond the last node (see `mms_transient.py`), so the geometry actually simulated is
+a cell beyond the last node (see `verification/mms_transient.py`), so the geometry actually simulated is
 $R+h/2$ and $H+h$. That is a **first-order** bias, and it has to be extrapolated away before the
 result is compared with an analytic theory.
 
@@ -249,7 +249,7 @@ md(r"""**Two opposite conclusions.**
 
 In other words, this calculation measures a natural frequency well and a radiation damping badly.
 Settling the latter numerically would require a formal PML and a dedicated convergence study;
-settling it experimentally is what `analyze_recording.py` is for.
+settling it experimentally is what `experiments/ringdown_analysis.py` is for.
 """)
 
 md(r"""## 6. Limits, stated plainly
@@ -267,16 +267,16 @@ md(r"""## 6. Limits, stated plainly
 ## 7. Reproducing this notebook
 
 ```bash
-python fdm_open_resonator.py                                          # study (~6 min)
-OR_TMS=120 OR_NFRAMES=420 OR_TAG=_anim python fdm_open_resonator.py   # animation data
-python make_resonance_anim.py                                         # -> plots/helmholtz_resonance.gif
-python convergence_f0.py                                              # mesh convergence of f0
+python src/transient_solver.py                                          # study (~6 min)
+OR_TMS=120 OR_NFRAMES=420 OR_TAG=_anim python src/transient_solver.py   # animation data
+python tools/make_resonance_anim.py                                         # -> figures/helmholtz_resonance.gif
+python verification/grid_convergence.py                                              # mesh convergence of f0
 ```
 """)
 
 nb = new_notebook(cells=cells, metadata={
     'kernelspec': {'display_name': 'Python 3', 'language': 'python', 'name': 'python3'},
     'language_info': {'name': 'python'}})
-with open('resonance_transitoire.ipynb', 'w', encoding='utf-8') as f:
+with open('notebooks/transient_study.ipynb', 'w', encoding='utf-8') as f:
     nbf.write(nb, f)
-print(f"Notebook written: resonance_transitoire.ipynb ({len(cells)} cells)")
+print(f"Notebook written: notebooks/transient_study.ipynb ({len(cells)} cells)")

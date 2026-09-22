@@ -45,14 +45,19 @@ A Trefftz method needs a particular solution supplied separately.
 
 Runs in about two minutes on a CPU. No training, no weights, no checkpoints.
 
-Output: data/bench_bases.npz, plots/bench_bases.png
+Output: data/bench_bases.npz, figures/bench_bases.png
 Env: BB_HID (96)  BB_F (209.84)  BB_SEED (0)
 """
+
 import os
+import sys
+
+# every path in this file is relative to the repository root
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(ROOT)
+sys.path.insert(0, ROOT)
 
 import numpy as np
-import scipy.sparse as sp
-from scipy.sparse.linalg import spsolve
 import torch
 import torch.nn as nn
 
@@ -60,8 +65,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-os.chdir(HERE)
+from src.harmonic_solver import HarmonicSolver
 torch.set_default_dtype(torch.float64)
 
 SEED = int(os.environ.get("BB_SEED", 0))
@@ -75,69 +79,9 @@ SRC_Z, SRC_W, SRC_A = L_NECK + 0.5 * H_CAV, 0.01, 1.0e4
 K2 = (2 * np.pi * FREQ / C) ** 2
 
 
-# --------------------------------------------------------------------------
-# The verified reference: the same harmonic solver as fdm_sweep.py
-# --------------------------------------------------------------------------
-def fdm(freq, h=1e-3):
-    w = 2 * np.pi * freq
-    k2 = (w / C) ** 2
-    ka = w / C * R_NECK
-    zr = RHO * C * (0.5 * ka ** 2 + 1j * (8 / (3 * np.pi)) * ka)
-    al = 1j * w * RHO / zr
-    nr = int(round(R_CAV / h)) + 1
-    nz = int(round(Z_TOP / h)) + 1
-    r = np.arange(nr) * h
-    z = np.arange(nz) * h
-    rr, zz = np.meshgrid(r, z, indexing="ij")
-    fl = (((zz < L_NECK - 1e-12) & (rr <= R_NECK + 1e-12))
-          | ((zz >= L_NECK - 1e-12) & (rr <= R_CAV + 1e-12)))
-    mo = fl & (np.abs(zz) < 1e-12) & (rr <= R_NECK + 1e-12)
-
-    def idx(i, j):
-        return i + j * nr
-
-    n, ih2 = nr * nz, 1.0 / h ** 2
-    forcing = SRC_A * np.exp(-(rr ** 2 + (zz - SRC_Z) ** 2) / (2 * SRC_W ** 2))
-    rows, cols, dat = [], [], []
-    b = np.zeros(n, complex)
-    for i in range(nr):
-        for j in range(nz):
-            ci = idx(i, j)
-            if not fl[i, j]:
-                rows += [ci]; cols += [ci]; dat += [1.0]
-                continue
-            diag = k2 + 0j
-            if i == 0:
-                diag += -4 * ih2
-                rows += [ci]; cols += [idx(1, j)]; dat += [4 * ih2]
-            else:
-                lc, rc = ih2 * (1 - 0.5 / i), ih2 * (1 + 0.5 / i)
-                diag += -2 * ih2
-                if fl[i - 1, j]:
-                    rows += [ci]; cols += [idx(i - 1, j)]; dat += [lc]
-                else:
-                    diag += lc
-                if i + 1 < nr and fl[i + 1, j]:
-                    rows += [ci]; cols += [idx(i + 1, j)]; dat += [rc]
-                else:
-                    diag += rc
-            if mo[i, j]:
-                diag += -2 * ih2 - 2 * al / h
-                rows += [ci]; cols += [idx(i, j + 1)]; dat += [2 * ih2]
-            else:
-                diag += -2 * ih2
-                for jj in (j - 1, j + 1):
-                    if 0 <= jj < nz and fl[i, jj]:
-                        rows += [ci]; cols += [idx(i, jj)]; dat += [ih2]
-                    else:
-                        diag += ih2
-            rows += [ci]; cols += [ci]; dat += [diag]
-            b[ci] = -forcing[i, j]
-    a = sp.coo_matrix((dat, (rows, cols)), shape=(n, n), dtype=complex).tocsr()
-    return r, z, fl, spsolve(a, b).reshape((nz, nr)).T
-
-
-r_ref, z_ref, FL, P_REF = fdm(FREQ)
+_solver = HarmonicSolver(h=1e-3)
+r_ref, z_ref, FL = _solver.r, _solver.z, _solver.fluid
+P_REF = _solver.solve(FREQ)
 ii, jj = np.where(FL)
 RG, ZG = r_ref[ii], z_ref[jj]
 PREF = P_REF[FL]
@@ -348,7 +292,7 @@ print("  error by 1/L^2 = 625, and the solution lives on a near-cancellation.")
 
 # --------------------------------------------------------------------------
 os.makedirs("data", exist_ok=True)
-os.makedirs("plots", exist_ok=True)
+os.makedirs("figures", exist_ok=True)
 np.savez("data/bench_bases.npz",
          names=np.array([r[0] for r in rows]),
          field_error=np.array([r[1] for r in rows]),
@@ -382,6 +326,6 @@ ax[1].set_title("Reality: none of them represents $\\nabla^2 P$")
 ax[1].grid(ls=":", alpha=0.6, axis="x", which="both")
 
 fig.tight_layout()
-fig.savefig("plots/bench_bases.png", dpi=140)
+fig.savefig("figures/bench_bases.png", dpi=140)
 plt.close(fig)
-print("\nFigure: plots/bench_bases.png | Data: data/bench_bases.npz")
+print("\nFigure: figures/bench_bases.png | Data: data/bench_bases.npz")

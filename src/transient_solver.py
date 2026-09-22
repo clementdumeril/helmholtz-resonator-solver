@@ -19,15 +19,22 @@ proof of resonance, and it does not depend on the content of the excitation.
 Verification: FFT of the cavity signal in free decay -> f0, compared with the
 Helmholtz formula and with the harmonic study of this project (~235 Hz).
 
-Outputs: data/open_resonator.npz, plots/open_resonator_diag.png
+Outputs: data/open_resonator.npz, figures/open_resonator_diag.png
 Env: OR_TMS (duration in ms, default 180), OR_H (step in mm, default 1.0)
 """
-import os, time
+
+import os
+import sys
+
+# every path in this file is relative to the repository root
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(ROOT)
+sys.path.insert(0, ROOT)
+
+import time
 import numpy as np
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-
-HERE = os.path.dirname(os.path.abspath(__file__)); os.chdir(HERE)
 
 # --- geometry and physics ---
 R_NECK, R_CAV, L_NECK, H_CAV = 0.01, 0.04, 0.04, 0.08
@@ -161,7 +168,7 @@ print(f"Q (radiation only, fitted)              : {Q_meas:6.1f}")
 print(f"cavity/exterior amplification (peak)    : {np.abs(pc).max()/max(np.abs(po).max(),1e-12):.2f}")
 
 TAG = os.environ.get("OR_TAG", "")
-os.makedirs("data", exist_ok=True); os.makedirs("plots", exist_ok=True)
+os.makedirs("data", exist_ok=True); os.makedirs("figures", exist_ok=True)
 np.savez_compressed(f"data/open_resonator{TAG}.npz",
     r=r, z=z, dom=dom, t=thist, p_cav=pc, p_neck=pn, p_out=po,
     frames=np.array(frames, dtype=np.float32), frame_t=np.array(frame_t),
@@ -181,5 +188,5 @@ ax[1].legend(fontsize=8); ax[1].grid(alpha=0.3)
 ax[2].semilogy(te*1e3, ee, "o-", ms=3)
 ax[2].set(xlabel="t (ms)", ylabel="envelope |p| (Pa)",
           title=f"Decay -> Q ~ {Q_meas:.0f}"); ax[2].grid(alpha=0.3)
-fig.tight_layout(); fig.savefig(f"plots/open_resonator_diag{TAG}.png", dpi=110)
-print(f"\nFigure: plots/open_resonator_diag{TAG}.png | Data: data/open_resonator{TAG}.npz")
+fig.tight_layout(); fig.savefig(f"figures/open_resonator_diag{TAG}.png", dpi=110)
+print(f"\nFigure: figures/open_resonator_diag{TAG}.png | Data: data/open_resonator{TAG}.npz")

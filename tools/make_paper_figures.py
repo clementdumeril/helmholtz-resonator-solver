@@ -1,22 +1,29 @@
 """
-Regenerate the four figures of explication_scientifique.pdf from stored data.
+Regenerate the four figures of paper/paper.pdf from stored data.
 
 Until now these figures had no generating script in the repository: they were
 produced by exploratory code that has since been removed, which meant the paper
 could not be rebuilt from the repository alone. This script closes that gap. It
 reads only `data/*.npz` and rewrites:
 
-    plots/doe_resonance.png        frequency response at L = 4 cm, h = 2 mm
-    plots/scaling_law_gci.png      weighted fit of the two scaling models
-    plots/phase1_losses.png        ring-down, logarithmic decrement, spectrum
-    plots/phase2_verification.png  comparison with the literature
+    figures/doe_resonance.png        frequency response at L = 4 cm, h = 2 mm
+    figures/scaling_law_gci.png      weighted fit of the two scaling models
+    figures/phase1_losses.png        ring-down, logarithmic decrement, spectrum
+    figures/phase2_verification.png  comparison with the literature
 
 The fits of `scaling_law_gci` are recomputed here rather than read back, so the
 figure, the stored results and the tables of the paper all come from one place.
 
-Run: python make_paper_figures.py
+Run: python tools/make_paper_figures.py
 """
+
 import os
+import sys
+
+# every path in this file is relative to the repository root
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(ROOT)
+sys.path.insert(0, ROOT)
 
 import numpy as np
 from scipy.optimize import curve_fit
@@ -25,10 +32,7 @@ from scipy.signal import hilbert
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-os.chdir(HERE)
-os.makedirs("plots", exist_ok=True)
+os.makedirs("figures", exist_ok=True)
 
 C = 343.0
 R_NECK, R_CAV, H_CAV = 0.01, 0.04, 0.08
@@ -55,9 +59,9 @@ def fig_doe_resonance():
     ax.grid(ls=":", alpha=0.7)
     ax.legend(fontsize=9)
     fig.tight_layout()
-    fig.savefig("plots/doe_resonance.png", dpi=150)
+    fig.savefig("figures/doe_resonance.png", dpi=150)
     plt.close(fig)
-    print("  plots/doe_resonance.png")
+    print("  figures/doe_resonance.png")
 
 
 # --------------------------------------------------------------------------
@@ -127,7 +131,7 @@ def fig_scaling_law():
     a2.legend(fontsize=9)
 
     fig.tight_layout()
-    fig.savefig("plots/scaling_law_gci.png", dpi=150)
+    fig.savefig("figures/scaling_law_gci.png", dpi=150)
     plt.close(fig)
 
     np.savez("data/scaling_law_gci_results.npz", L=L, f_fine=d["f_fine"],
@@ -135,7 +139,7 @@ def fig_scaling_law():
              aicc_power=aic_a, loo_power=loo_a, popt_efflen=pb, perr_efflen=eb,
              aicc_efflen=aic_b, loo_efflen=loo_b, dAICc=aic_a - aic_b,
              a_theory=A_H_TH)
-    print("  plots/scaling_law_gci.png  (and refreshed data/scaling_law_gci_results.npz)")
+    print("  figures/scaling_law_gci.png  (and refreshed data/scaling_law_gci_results.npz)")
 
 
 # --------------------------------------------------------------------------
@@ -160,7 +164,7 @@ def fig_losses():
     q_bulk = float(d["Q_bulk_analytic"])
     dt = float(t[1] - t[0])
 
-    # Logarithmic decrement: the same estimator as analyze_recording.py.
+    # Logarithmic decrement: the same estimator as experiments/ringdown_analysis.py.
     env = np.abs(hilbert(visc))
     keep = (t > 10e-3) & (t < 55e-3)          # avoid the Hilbert edge effects
     slope = np.polyfit(t[keep], np.log(env[keep]), 1)[0]
@@ -208,9 +212,9 @@ def fig_losses():
     ax[2].grid(ls=":", alpha=0.7)
 
     fig.tight_layout()
-    fig.savefig("plots/phase1_losses.png", dpi=150)
+    fig.savefig("figures/phase1_losses.png", dpi=150)
     plt.close(fig)
-    print(f"  plots/phase1_losses.png    (calibration target Q = {q_analytic:.1f}, "
+    print(f"  figures/phase1_losses.png    (calibration target Q = {q_analytic:.1f}, "
           f"decrement on the stored trace {q_measured:.1f}, "
           f"{abs(q_measured - q_analytic) / q_analytic * 100:.1f} % apart)")
     return q_measured
@@ -257,15 +261,15 @@ def fig_verification(q_solver):
     a2.legend(fontsize=9, loc="lower right")
 
     fig.tight_layout()
-    fig.savefig("plots/phase2_verification.png", dpi=150)
+    fig.savefig("figures/phase2_verification.png", dpi=150)
     plt.close(fig)
-    print("  plots/phase2_verification.png")
+    print("  figures/phase2_verification.png")
 
 
 if __name__ == "__main__":
-    print("Regenerating the figures of explication_scientifique.pdf")
+    print("Regenerating the figures of paper/paper.pdf")
     fig_doe_resonance()
     fig_scaling_law()
     q_measured = fig_losses()
     fig_verification(q_measured)
-    print("Done. Rebuild the paper with:  latexmk -pdf explication_scientifique.tex")
+    print("Done. Rebuild the paper with:  latexmk -pdf paper/paper.tex")
