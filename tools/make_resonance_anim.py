@@ -44,12 +44,12 @@ dom_f = mirror(dom)
 vmax = 1.15*np.abs(p_cav).max()          # scale set by the resonance (the source saturates)
 
 # temporal subsampling, to keep the GIF small
-STEP = int(os.environ.get("AN_STEP", 2))
+STEP = int(os.environ.get("AN_STEP", 3))
 idx = np.arange(0, len(ft), STEP)
 
 plt.rcParams.update({"font.size": 9.5})
-fig = plt.figure(figsize=(8.8, 6.9))
-gs = GridSpec(2, 1, height_ratios=[1.5, 1.0], hspace=0.38)
+fig = plt.figure(figsize=(6.2, 6.6))
+gs = GridSpec(2, 1, height_ratios=[1.9, 1.0], hspace=0.30, top=0.93, bottom=0.08, left=0.11, right=0.90)
 axF = fig.add_subplot(gs[0]); axS = fig.add_subplot(gs[1])
 
 zmm, rmm = z*1e3, r_full*1e3
@@ -79,7 +79,7 @@ axS.plot(t*1e3, p_cav, "C0", lw=0.9, label="cavity probe (resonance)")
 axS.set(xlabel="t (ms)", ylabel="p (Pa)", xlim=(0, ft.max()*1e3))
 axS.grid(alpha=0.3); axS.legend(fontsize=8, loc="upper right")
 cur = axS.axvline(ft[0]*1e3, color="C3", lw=1.4)
-sup = fig.suptitle("", fontsize=10.5, y=0.978)
+sup = fig.suptitle("", fontsize=9.5, y=0.985)
 
 def phase_label(tt):
     if tt < 0.010: return "the pulse propagates"
@@ -90,8 +90,8 @@ def update(k):
     i = idx[k]
     qm.set_array(np.where(dom_f, mirror(frames[i]), np.nan).ravel())
     cur.set_xdata([ft[i]*1e3, ft[i]*1e3])
-    sup.set_text(f"Open-neck Helmholtz resonator  |  t = {ft[i]*1e3:5.1f} ms  "
-                 f"-  {phase_label(ft[i])}   (f0 = {f0:.0f} Hz)")
+    sup.set_text(f"t = {ft[i]*1e3:5.1f} ms  "
+                 f"-  {phase_label(ft[i])}")
     return qm, cur, sup
 
 anim = FuncAnimation(fig, update, frames=len(idx), blit=False)
@@ -103,6 +103,6 @@ from PIL import Image, ImageSequence
 im = Image.open(out)
 fr = [f.convert("RGB").quantize(colors=80, method=Image.MEDIANCUT)
       for f in ImageSequence.Iterator(im)]
-fr[0].save(out, save_all=True, append_images=fr[1:], duration=50, loop=0, optimize=True)
+fr[0].save(out, save_all=True, append_images=fr[1:], duration=int(1000*STEP/40), loop=0, optimize=True)
 print(f"Animation: {out}  ({len(idx)} frames, f0={f0:.0f} Hz, "
       f"{os.path.getsize(out)/1e6:.1f} MB)")

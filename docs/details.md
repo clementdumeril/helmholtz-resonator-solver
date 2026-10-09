@@ -1,0 +1,63 @@
+# Details
+
+Supporting material for the [README](../README.md): the frequency-domain extrapolation, the outer-boundary study, the validation cases, and secondary results from the harmonic notebook.
+
+## Frequency-domain f0 extrapolated to zero mesh (203.4 Hz, GCI 2.0%)
+
+The three sweeps were run with `studies/frequency_sweep.py` (radiation impedance at the mouth) over 195–220 Hz in 0.05 Hz steps on 2, 1 and 0.5 mm grids, each peak located by a three-point parabola. The extrapolation uses the versioned results:
+
+```python
+import numpy as np
+f2, f1, f05 = (float(np.load(f"data/fdm_sweep_h{h}.npz")["f_pk"]) for h in ("2.0", "1.0", "0.5"))
+p = np.log((f2 - f1) / (f1 - f05)) / np.log(2)    # observed order: 0.94
+f_ext = f05 + (f05 - f1) / (2**p - 1)             # 203.39 Hz
+gci = 1.25 * abs(f1 - f05) / f05 / (2**p - 1)     # 2.0 %
+```
+
+Peaks: 215.74, 209.84 and 206.75 Hz. The time-domain solver extrapolates to 204.60 Hz (`data/convergence_f0.npz`, observed order 0.86, GCI 1.5%), a gap of 0.59%.
+
+## Outer-boundary study
+
+Source: [`studies/radiation_boundaries.py`](../studies/radiation_boundaries.py), data in `data/pml_study.npz`.
+
+With the original sponge layer, the radiation Q of the time-domain solver ranged from 44 to 267 depending on layer strength, thickness and domain size (`data/sponge_sensitivity.npz`), while f0 did not move. I implemented three terminations in one solver and measured each against the same run on a domain three times larger, where no reflection can return within the time window:
+
+- sponge: a damping term σ·∂p/∂t over a layer. It reflects 44% of the incident amplitude, which explains the factor of six on Q.
+- first-order Mur: ∂p/∂t + c ∂p/∂n = 0 on the outer ring, exact at normal incidence only. 5.6%.
+- PML: the unsplit second-order formulation with two auxiliary fields. 7.1% at the default strength, 4.0% after scanning σ.
+
+The PML reaches 0.093% (−61 dB) on the flat boundary, where the Cartesian complex stretch is exact, but stays at 4.0% (−28 dB) on the curved radial boundary, because I used the Cartesian stretch in (r, z) and left out the 1/r term of a cylindrical PML. Neither a stronger σ nor a thicker layer lowers that floor.
+
+A stable Q between 10 and 18 cm of exterior is still not convergence. At 209 Hz the wavelength is 1.64 m, so a 10 cm exterior is 0.06 of a wavelength and the PML sits in the reactive near field of the mouth. Enlarging it:
+
+| Exterior | In wavelengths | Radiation Q | f0 (Hz) |
+|---|---|---|---|
+| 10 cm | 0.061 | 98.1 | 208.32 |
+| 18 cm | 0.110 | 116.6 | 208.42 |
+| 30 cm | 0.183 | 187.2 | 208.53 |
+| 45 cm | 0.274 | 269.6 | 208.49 |
+
+Q climbs towards the 285.6 given by the analytic radiation impedance (`data/fdm_sweep_fin.npz`), while f0 stays within 0.1%. The largest run is consistent with convergence there but does not demonstrate it.
+
+![Outer-boundary treatments](../figures/pml_study.png)
+
+*(a) Probe signal against the large-domain reference. (b) Error over time, at the default layer strength (PML −23 dB). (c) Radiation Q against exterior size in wavelengths.*
+
+## Validation cases
+
+Source: [`experiments/literature_validation.py`](../experiments/literature_validation.py) and section 5 of [`notebooks/harmonic_study.ipynb`](../notebooks/harmonic_study.ipynb).
+
+Selamet et al. (1997, J. Acoust. Soc. Am. 102(6)) measured concentric cylindrical resonators as side branches on a duct. At resonance the input impedance of the neck vanishes, so the mouth is a pressure-release (Dirichlet) boundary rather than a radiating one; the notebook models that configuration. Results at h = 1 mm: 93.0 Hz against 91 Hz (2.2%) and 72.7 Hz against 72 Hz (0.9%), with no fitted parameter.
+
+Indenbom & Pogossian (2023, Acta Acustica 7, 30) measured a 100 mL Erlenmeyer flask at 351 Hz where their lumped formula gives 391 Hz. My lumped model reproduces their 391 Hz to 0.1%. The finite-difference solver, with the flask replaced by a cylinder of equal volume, gives 387–396 Hz across every aspect ratio tried, so resolving the field near the neck does not close the gap. The discrepancy corresponds to an effective neck about 54 mm long instead of 43 mm, which would fit a neck flaring into a conical shoulder; my cylindrical cavity cannot represent that.
+
+For damping, the only open-access half-width I found for a resonator with fully stated geometry is in the same paper. It gives Q between 18 and 30, a range because the paper does not state whether the width is taken at half amplitude or half power. I predict about 40. The model is optimistic about damping, as Moloney (2004) also reports: the viscothermal loss in the neck is about three times the radiation loss and is not resolved by either solver.
+
+## Other results from the harmonic notebook
+
+- Frequency sweep: 1,000 harmonic solves from 1 to 1000 Hz take 77 s. At a 1 Hz step the peak read 209.95 Hz and 6.62 kPa; at 0.005 Hz it is 209.84 Hz and 7.25 kPa, because the −3 dB bandwidth (0.73 Hz) is narrower than the first step.
+- Scaling law over neck length: a power law and the effective-length model f0 = A/√(L + ΔL) are statistically indistinguishable on the extrapolated frequencies (ΔAICc 0.3 with 5 lengths, 1.8 with 12). I keep the physical model: A matches the theoretical 48.25 m^1/2/s, ΔL ≈ 0.67a, and its leave-one-out error is 5 to 10 times smaller.
+- End-correction decomposition: the radiation impedance shifts ΔL by 0.823a, against 8a/(3π) = 0.849a (3.1%). This is a consistency check, since that reactance is imposed.
+- Losses: viscothermal friction in the neck gives Q ≈ 47; bulk absorption is negligible (Q ~ 10⁶).
+
+A longer write-up of the harmonic study, with the derivations, is in [`paper/paper.pdf`](../paper/paper.pdf).
