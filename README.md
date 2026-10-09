@@ -6,7 +6,7 @@ Two independent axisymmetric finite-difference solvers (frequency domain and tim
 
 *Time-domain solver, 1 mm grid. A broadband pulse enters the neck; once it has passed, the cavity keeps oscillating at its own frequency. No frequency is imposed.*
 
-This started as my TIPE, the research project of the French classes préparatoires, in 2023. In 2026 I reopened it and rebuilt it properly. The repository began in August 2026 as a physics-informed neural network experiment, hence its old name (`PINN-Helmholtz`). I later removed that part: I could not judge a network's output without a reference I trusted, so I wrote and verified that reference instead. The question: can a finite-difference model predict the natural frequency of an open resonator with a stated uncertainty, and where does it stop matching reality?
+This started in 2023 as my TIPE, the individual research project of the French classes préparatoires. In 2026 I reopened it and rebuilt it properly. The repository began in August 2026 as a physics-informed neural network experiment, hence its old name (`PINN-Helmholtz`). I later removed that part: I could not judge a network's output without a reference I trusted, so I wrote and verified that reference instead. The question: can a finite-difference model predict the natural frequency of an open resonator with a stated uncertainty, and where does it stop matching reality?
 
 Reference geometry: neck radius 1 cm, neck length 4 cm, cylindrical cavity of radius 4 cm and height 8 cm, air at 20 °C.
 
