@@ -1,6 +1,10 @@
 # Details
 
-Supporting material for the [README](../README.md): the frequency-domain extrapolation, the outer-boundary study, the validation cases, and secondary results from the harmonic notebook.
+Supporting material for the [README](../README.md): the axis treatment, the frequency-domain extrapolation, the outer-boundary study, the validation cases, and secondary results from the harmonic notebook.
+
+## Axis treatment
+
+Both solvers work on the meridian plane (r, z). On the axis the term (1/r)·∂p/∂r is 0/0; by L'Hôpital's rule it becomes ∂²p/∂r², so the Laplacian there is 2∂²p/∂r² + ∂²p/∂z², and its radial part is discretised as 4(p₁ − p₀)/h² (mirror symmetry about the axis supplies one factor of two, the limit the other).
 
 ## Frequency-domain f0 extrapolated to zero mesh (203.4 Hz, GCI 2.0%)
 
@@ -51,7 +55,7 @@ Selamet et al. (1997, J. Acoust. Soc. Am. 102(6)) measured concentric cylindrica
 
 Indenbom & Pogossian (2023, Acta Acustica 7, 30) measured a 100 mL Erlenmeyer flask at 351 Hz where their lumped formula gives 391 Hz. My lumped model reproduces their 391 Hz to 0.1%. The finite-difference solver, with the flask replaced by a cylinder of equal volume, gives 387–396 Hz across every aspect ratio tried, so resolving the field near the neck does not close the gap. The discrepancy corresponds to an effective neck about 54 mm long instead of 43 mm, which would fit a neck flaring into a conical shoulder; my cylindrical cavity cannot represent that.
 
-For damping, the only open-access half-width I found for a resonator with fully stated geometry is in the same paper. It gives Q between 18 and 30, a range because the paper does not state whether the width is taken at half amplitude or half power. I predict about 40. The model is optimistic about damping, as Moloney (2004) also reports: the viscothermal loss in the neck is about three times the radiation loss and is not resolved by either solver.
+For damping, the only open-access half-width I found for a resonator with fully stated geometry is in the same paper. It gives Q between 18 and 30, a range because the paper does not state whether the width is taken at half amplitude or half power. I predict about 40. The model is optimistic about damping, as Moloney (2004) also reports. The script's loss estimate for the flask gives Q_visc ≈ 52 for viscothermal friction in the neck and Q_rad ≈ 167 for radiation, so the viscothermal loss is about three times the radiation loss, and neither solver resolves it.
 
 ## Other results from the harmonic notebook
 

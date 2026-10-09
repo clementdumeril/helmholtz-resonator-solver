@@ -60,3 +60,7 @@ data/pinn_*.npz
 data/train_pinn_seed*.npz
 figures/train_pinn_seed*.png
 models/
+
+# Partial runs of studies/radiation_boundaries.py (PML_SKIP_B / PML_SKIP_C)
+data/pml_study_part*.npz
+figures/pml_study_part*.png

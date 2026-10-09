@@ -57,8 +57,11 @@ PML      the unsplit second-order formulation, with two auxiliary fields:
 
 Output: data/pml_study.npz, figures/pml_study.png
 Env: PML_H (mm, 1.0)  PML_LSP (m, 0.03)  PML_SKIP_B (0/1)  PML_SKIP_C (0/1)
-Runtime: Part A about a minute; Parts B and C are hours -- set PML_SKIP_C=1
-for the short form.
+Runtime: Part A takes a few minutes; Parts B and C take hours. For the short
+form set PML_SKIP_B=1 PML_SKIP_C=1. Whenever a part is skipped, the outputs get
+a suffix naming the parts that ran (data/pml_study_partA.npz,
+figures/pml_study_partA.png), so the versioned full results are not
+overwritten.
 """
 
 import os
@@ -541,7 +544,7 @@ def part_c(sizes=(0.10, 0.18, 0.30, 0.45)):
 
 
 # ==========================================================================
-def figure(res_a, rows_b, rows_c=()):
+def figure(res_a, rows_b, rows_c=(), path="figures/pml_study.png"):
     fig, ax = plt.subplots(1, 3, figsize=(15.5, 4.3))
     colours = {"sponge": "#a8442a", "abc": "#e8a33d", "pml": "#1d5480"}
     names = {"sponge": "sponge layer", "abc": "first-order ABC", "pml": "PML"}
@@ -597,20 +600,26 @@ def figure(res_a, rows_b, rows_c=()):
         ax[2].grid(ls=":", alpha=0.6, axis="y")
 
     fig.tight_layout()
-    fig.savefig("figures/pml_study.png", dpi=140)
+    fig.savefig(path, dpi=140)
     plt.close(fig)
-    print("\nFigure: figures/pml_study.png")
+    print(f"\nFigure: {path}")
 
 
 if __name__ == "__main__":
     os.makedirs("data", exist_ok=True)
     os.makedirs("figures", exist_ok=True)
     res_a = part_a()
-    rows_b = [] if os.environ.get("PML_SKIP_B") == "1" else part_b()
-    rows_c = [] if os.environ.get("PML_SKIP_C") == "1" else part_c()
-    figure(res_a, rows_b, rows_c)
+    skip_b = os.environ.get("PML_SKIP_B") == "1"
+    skip_c = os.environ.get("PML_SKIP_C") == "1"
+    rows_b = [] if skip_b else part_b()
+    rows_c = [] if skip_c else part_c()
+    # A partial run must not overwrite the versioned full results.
+    suffix = "" if not (skip_b or skip_c) else \
+        "_partA" + ("" if skip_b else "B") + ("" if skip_c else "C")
+    data_path = f"data/pml_study{suffix}.npz"
+    figure(res_a, rows_b, rows_c, path=f"figures/pml_study{suffix}.png")
     np.savez_compressed(
-        "data/pml_study.npz",
+        data_path,
         treatments=np.array(["sponge", "abc", "pml"]),
         reflection=np.array([res_a[k]["refl"] for k in ("sponge", "abc", "pml")]),
         sigma_scan_x=np.array(sorted(res_a["sigma_scan"])),
@@ -627,4 +636,4 @@ if __name__ == "__main__":
         sweep_zext=np.array([r[0] for r in rows_c]),
         sweep_f0=np.array([r[1] for r in rows_c]),
         sweep_q=np.array([r[2] for r in rows_c]))
-    print("Data:   data/pml_study.npz")
+    print(f"Data:   {data_path}")

@@ -6,7 +6,7 @@ Two independent axisymmetric finite-difference solvers (frequency domain and tim
 
 *Time-domain solver, 1 mm grid. A broadband pulse enters the neck; once it has passed, the cavity keeps oscillating at its own frequency. No frequency is imposed.*
 
-This started as my TIPE, the research project of the French classes préparatoires, in 2023. In 2026 I reopened it and rebuilt it properly. The repository began as a physics-informed neural network experiment, hence its old name (`PINN-Helmholtz`), but I could not judge a network's output without a reference I trusted, so I wrote and verified that reference first. The question: can a finite-difference model predict the natural frequency of an open resonator with a stated uncertainty, and where does it stop matching reality?
+This started as my TIPE, the research project of the French classes préparatoires, in 2023. In 2026 I reopened it and rebuilt it properly. The repository began in August 2026 as a physics-informed neural network experiment, hence its old name (`PINN-Helmholtz`). I later removed that part: I could not judge a network's output without a reference I trusted, so I wrote and verified that reference instead. The question: can a finite-difference model predict the natural frequency of an open resonator with a stated uncertainty, and where does it stop matching reality?
 
 Reference geometry: neck radius 1 cm, neck length 4 cm, cylindrical cavity of radius 4 cm and height 8 cm, air at 20 °C.
 
@@ -18,7 +18,7 @@ Skills: PDE discretisation, sparse linear algebra (SciPy), explicit time integra
 |---|---|---|
 | f0, time-domain solver, extrapolated to h → 0 | 204.6 Hz, GCI 1.5% | [`verification/grid_convergence.py`](verification/grid_convergence.py) |
 | f0, frequency-domain solver, extrapolated to h → 0 | 203.4 Hz, GCI 2.0% | `data/fdm_sweep_h*.npz`, computation in [`docs/details.md`](docs/details.md) |
-| Lumped formula with end corrections | 205.6 Hz | 0.47% from the time-domain value |
+| Lumped formula with end corrections | 205.6 Hz (0.5% above the time-domain value) | `data/convergence_f0.npz` |
 | Selamet et al. (1997), two published resonators | 0.9% and 2.2% off, no fitted parameter | [`notebooks/harmonic_study.ipynb`](notebooks/harmonic_study.ipynb) §5 |
 | Indenbom & Pogossian (2023), Erlenmeyer flask | missed by about 11% | [`experiments/literature_validation.py`](experiments/literature_validation.py) |
 
@@ -47,7 +47,7 @@ I wrote all the code here. The physics (lumped model, end corrections, baffled-p
 
 The resonator is a mass on a spring: the air plug in the neck oscillates against the compressibility of the air in the cavity, so f0 = (c/2π)·√(S / (V·(L + ΔL))). The end correction ΔL accounts for the air moving with the plug just outside the neck. The time-domain solver computes it from the meshed exterior; the frequency-domain solver imposes it through the radiation impedance.
 
-Both solvers work on the meridian plane. On the axis the term (1/r)·∂p/∂r is 0/0; by L'Hôpital's rule it becomes ∂²p/∂r², so the radial part of the Laplacian there is discretised as 4(p₁ − p₀)/h².
+Both solvers work on the meridian plane of the axisymmetric geometry (axis treatment in [`docs/details.md`](docs/details.md)).
 
 ![Resonant mode from the frequency-domain solver](figures/helmholtz_mode.gif)
 
@@ -62,7 +62,7 @@ Both solvers work on the meridian plane. On the axis the term (1/r)·∂p/∂r i
 | Cross-check | Does an independent solver agree? | 203.4 vs 204.6 Hz (0.6%), different discretisation and radiation model |
 | Validation | Does it match measurements? | Selamet et al. within 0.9% and 2.2%; one flask missed by 11% |
 
-**The manufactured solution found a first-order bias.** Matched to the nominal wall position, the transient test gave order 1.00 instead of 2. The masked finite-volume scheme puts a rigid wall half a cell beyond the last node, so the simulated geometry is R + h/2. Matched to R + h/2, the same test gives order 1.98 and errors 27 times smaller at h = 2 mm. The scheme is second order; the O(h) error comes from the wall position. From then on I only compared frequencies extrapolated to h → 0.
+The manufactured solution found a first-order bias. Matched to the nominal wall position, the transient test gave order 1.00 instead of 2. The masked finite-volume scheme puts a rigid wall half a cell beyond the last node, so the simulated geometry is R + h/2. Matched to R + h/2, the same test gives order 1.98 and errors 27 times smaller at h = 2 mm. The scheme is second order; the O(h) error comes from the wall position. From then on I only compared frequencies extrapolated to h → 0.
 
 ![Transient MMS](figures/mms_transient.png)
 
@@ -84,7 +84,7 @@ Why the PML floors at 4%, and how Q approaches the analytic value as the exterio
 
 ### Neural bases: a measured negative result
 
-Without training anything, I fitted the verified field onto each neural basis by least squares and measured the PDE residual of that best fit. tanh, SIREN, Gabor atoms and domain decomposition all represent the field to better than 0.4%, yet leave a residual 2,500 to 10,000 times that of the zero field. The cause is a near-cancellation between ∇²p and −k²p: a 0.15% error on p is a large error on ∇²p. A Trefftz basis of Bessel functions solves the homogeneous equation exactly, so its residual equals the zero field's, but it cannot carry the source and fits the field only to 4%. I did not train a PINN on this problem.
+Without training anything, I fitted the verified field onto each neural basis by least squares and measured the PDE residual of that best fit. tanh, SIREN, Gabor atoms and domain decomposition all represent the field to better than 0.4%, yet leave a residual 2,500 to 10,000 times that of the zero field. The cause is a near-cancellation between ∇²p and −k²p: a 0.15% error on p is a large error on ∇²p. A Trefftz basis of Bessel functions solves the homogeneous equation exactly, so its residual equals the zero field's, but it cannot carry the source and fits the field only to 4%. No network is trained in this benchmark.
 
 ![Neural basis benchmark](figures/bench_bases.png)
 
@@ -110,7 +110,7 @@ PML_SKIP_B=1 PML_SKIP_C=1 python studies/radiation_boundaries.py   # part A only
 jupyter lab notebooks/harmonic_study.ipynb            # harmonic MMS, GCI, Selamet
 ```
 
-The short PML run rewrites `data/pml_study.npz` and its figure with part A only; parts B and C take hours. The time-domain grid convergence needs three solver runs first (the 0.5 mm one costs about eight times the 1 mm one):
+The short PML run writes `data/pml_study_partA.npz` and `figures/pml_study_partA.png`, leaving the versioned full results untouched; parts B and C take hours. The time-domain grid convergence needs three solver runs first (the 0.5 mm one costs about eight times the 1 mm one):
 
 ```bash
 OR_TMS=250 OR_H=2   OR_TAG=_h2  python src/transient_solver.py
