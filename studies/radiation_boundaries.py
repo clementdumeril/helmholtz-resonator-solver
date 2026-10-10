@@ -9,7 +9,7 @@ implements the three terminations in one solver and measures them.
 
 Part A -- reflection.  A Ricker pulse is fired into a homogeneous exterior box
 and the field is compared, at a probe, against the same computation on a domain
-enlarged threefold, where no reflection can return within the time window. The
+enlarged fourfold (ENLARGE = 4), where no reflection can return within the time window. The
 difference IS the spurious reflection, so the comparison needs no analytic
 reference:
 
@@ -551,7 +551,7 @@ def figure(res_a, rows_b, rows_c=(), path="figures/pml_study.png"):
 
     ref = res_a["reference"]
     ax[0].plot(ref["t"] * 1e3, ref["p"] / ref["scale"], color="0.65", lw=2.2,
-               label="reference (domain x3)")
+               label=f"reference (domain x{ENLARGE})")
     for a in ("sponge", "abc", "pml"):
         ax[0].plot(res_a[a]["t"] * 1e3, res_a[a]["p"] / ref["scale"], lw=1.1,
                    color=colours[a], label=names[a])

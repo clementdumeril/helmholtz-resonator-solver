@@ -10,7 +10,7 @@ and not chosen after seeing how the model performs).
 
 Two independent sources, both with the complete geometry stated:
 
-  SELAMET et al. (1997), J. Acoust. Soc. Am. 102(6), 3491-3502.
+  SELAMET et al. (1997), J. Acoust. Soc. Am. 101(1), 41-51, doi:10.1121/1.417986.
       Concentric cylindrical resonators measured in an impedance tube and
       cross-checked against a 3-D boundary-element method to within 1 Hz.
       They are side branches on a duct, so their mouth is a Dirichlet boundary
@@ -18,7 +18,7 @@ Two independent sources, both with the complete geometry stated:
       values quoted here therefore come from notebooks/harmonic_study.ipynb,
       which models that configuration.
 
-  INDENBOM & POGOSSIAN (2023), Acta Acustica 7, 30; arXiv:2212.08858.
+  INDENBOM & POGOSSIAN (2023), Acta Acustica 7, 51, doi:10.1051/aacus/2023039; arXiv:2212.08858.
       A 100 mL Erlenmeyer flask driven by an earphone placed inside it, with the
       response recorded by an internal microphone. Neck length 32 mm, neck
       diameter 18 mm, internal volume about 115 cm3, sound speed 343.5 m/s at

@@ -12,6 +12,8 @@ Reference geometry: neck radius 1 cm, neck length 4 cm, cylindrical cavity of ra
 
 Skills: PDE discretisation, sparse linear algebra (SciPy), explicit time integration, PML, verification & validation (MMS, Richardson/GCI).
 
+Full report: [`paper/main.pdf`](paper/main.pdf), a 12-page preprint with the formulation, the verification, the comparison with published measurements and the limitations.
+
 ## Results
 
 | Quantity | Value | Source |
@@ -51,7 +53,7 @@ Both solvers work on the meridian plane of the axisymmetric geometry (axis treat
 
 ![Resonant mode from the frequency-domain solver](figures/helmholtz_mode.gif)
 
-*Frequency-domain solution near resonance (0.5 mm grid). Neck velocity and cavity pressure are in quadrature (+90.2° measured), as expected for a mass-spring system.*
+*Frequency-domain solution at 209.84 Hz on the 0.5 mm grid. Neck velocity and cavity pressure are in quadrature (+90.2° measured), as expected for a mass-spring system.*
 
 ## How I checked it
 
@@ -72,7 +74,7 @@ Extrapolating also fixed the end correction: 1.29a from the raw 1 mm run, 1.56a 
 
 ### Radiation damping and the outer boundary
 
-With the original sponge layer, the radiation Q of the time-domain solver varied by a factor of six with purely numerical settings. Measuring each outer boundary against a domain three times larger showed why:
+With the original sponge layer, the radiation Q of the time-domain solver varied by a factor of six with purely numerical settings. Measuring each outer boundary against a domain four times larger showed why:
 
 | Outer boundary | Spurious reflection | Q drift, exterior 10 → 18 cm |
 |---|---|---|
@@ -125,4 +127,4 @@ The notebooks are committed with their outputs.
 
 Clément Dumeril ([clement.dumeril.net](https://clement.dumeril.net), [github.com/clementdumeril](https://github.com/clementdumeril)). MIT licence, see [LICENSE](LICENSE).
 
-Theory and data: Helmholtz (1860), Rayleigh (1896), Crandall (1926), Ingard (1953), Morse & Ingard (1968), Bérenger (1994), Roache (1994, 1998), Selamet et al. (1997), Peters et al. (2003), Moloney (2004), Indenbom & Pogossian (2023), and Mur's first-order absorbing boundary condition. Entries in [`paper/references.bib`](paper/references.bib). Built on NumPy, SciPy, Matplotlib and PyTorch.
+Theory and data: Helmholtz (1860), Rayleigh (1896), Ingard (1953), Morse & Ingard (1968), Mur (1981), Bérenger (1994), Roache (1994, 1998, 2002), Selamet et al. (1997), Moloney (2004), Grote & Sim (2010), Indenbom & Pogossian (2023). Full entries, each checked against its DOI or arXiv record, in [`paper/references.bib`](paper/references.bib). Built on NumPy, SciPy, Matplotlib and PyTorch.

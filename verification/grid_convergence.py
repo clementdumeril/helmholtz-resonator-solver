@@ -76,75 +76,80 @@ def fit_f0(t, p):
     return abs(f), Q, resid
 
 
-CASES = [(2.0e-3, "data/open_resonator_h2.npz"),
-         (1.0e-3, "data/open_resonator.npz"),
-         (0.5e-3, "data/open_resonator_h05.npz")]
+def main():
+    CASES = [(2.0e-3, "data/open_resonator_h2.npz"),
+             (1.0e-3, "data/open_resonator.npz"),
+             (0.5e-3, "data/open_resonator_h05.npz")]
 
-hs, f0s, Qs = [], [], []
-print("=== PRECISE MEASUREMENT BY DAMPED-SINUSOID FIT ===\n")
-for h, path in CASES:
-    if not os.path.exists(path):
-        print(f"h = {h*1e3:.2f} mm : {path} missing - skipped")
-        continue
-    d = np.load(path)
-    f0, Q, res = fit_f0(d["t"], d["p_cav"])
-    f_fft = float(d["f0_meas"])
-    hs.append(h); f0s.append(f0); Qs.append(Q)
-    print(f"h = {h*1e3:5.2f} mm | f0(FFT) = {f_fft:7.2f} Hz | "
-          f"f0(fit) = {f0:8.3f} Hz | Q = {Q:7.1f} | residual {res*100:.2f} %")
+    hs, f0s, Qs = [], [], []
+    print("=== PRECISE MEASUREMENT BY DAMPED-SINUSOID FIT ===\n")
+    for h, path in CASES:
+        if not os.path.exists(path):
+            print(f"h = {h*1e3:.2f} mm : {path} missing - skipped")
+            continue
+        d = np.load(path)
+        f0, Q, res = fit_f0(d["t"], d["p_cav"])
+        f_fft = float(d["f0_meas"])
+        hs.append(h); f0s.append(f0); Qs.append(Q)
+        print(f"h = {h*1e3:5.2f} mm | f0(FFT) = {f_fft:7.2f} Hz | "
+              f"f0(fit) = {f0:8.3f} Hz | Q = {Q:7.1f} | residual {res*100:.2f} %")
 
-hs = np.array(hs); f0s = np.array(f0s)
+    hs = np.array(hs); f0s = np.array(f0s)
 
-# --- effective geometry: walls half a cell beyond the last node ---
-def f_helm(Rn, Rc, Hc, Leff):
-    S = np.pi*Rn**2; V = np.pi*Rc**2*Hc
-    return C/(2*np.pi)*np.sqrt(S/(V*Leff))
+    # --- effective geometry: walls half a cell beyond the last node ---
+    def f_helm(Rn, Rc, Hc, Leff):
+        S = np.pi*Rn**2; V = np.pi*Rc**2*Hc
+        return C/(2*np.pi)*np.sqrt(S/(V*Leff))
 
-print("\n=== HALF-CELL GEOMETRIC BIAS (prediction) ===")
-print("the solver simulates R + h/2 and H + h, not the nominal dimensions")
-for h in hs:
-    fn = f_helm(R_NECK, R_CAV, H_CAV, L_NECK + 1.29*R_NECK)
-    fe = f_helm(R_NECK + h/2, R_CAV + h/2, H_CAV + h, L_NECK + 1.29*R_NECK)
-    print(f"  h = {h*1e3:5.2f} mm : predicted shift in f0 = {(fe/fn - 1)*100:+5.2f} %")
+    print("\n=== HALF-CELL GEOMETRIC BIAS (prediction) ===")
+    print("the solver simulates R + h/2 and H + h, not the nominal dimensions")
+    for h in hs:
+        fn = f_helm(R_NECK, R_CAV, H_CAV, L_NECK + 1.29*R_NECK)
+        fe = f_helm(R_NECK + h/2, R_CAV + h/2, H_CAV + h, L_NECK + 1.29*R_NECK)
+        print(f"  h = {h*1e3:5.2f} mm : predicted shift in f0 = {(fe/fn - 1)*100:+5.2f} %")
 
-if len(hs) >= 3:
-    f3, f2, f1 = f0s[0], f0s[1], f0s[2]        # coarse, medium, fine
-    p = np.log(abs((f3 - f2)/(f2 - f1)))/np.log(2.0)
-    f_ext = f1 + (f1 - f2)/(2**p - 1)
-    gci = 1.25*abs((f2 - f1)/f1)/(2**p - 1)
-    print(f"\n=== EXTRAPOLATION (3 grids) ===")
-    print(f"  observed order p     = {p:.3f}")
-    print(f"  extrapolated f0      = {f_ext:.2f} Hz")
-    print(f"  GCI uncertainty      = {gci*100:.2f} %")
-elif len(hs) == 2:
-    f2, f1 = f0s[0], f0s[1]
-    f_ext = f1 + (f1 - f2)          # order 1 assumed (geometric bias)
-    p, gci = 1.0, abs((f1-f2)/f1)
-    print(f"\n=== EXTRAPOLATION (2 grids, order 1 ASSUMED) ===")
-    print(f"  extrapolated f0      = {f_ext:.2f} Hz   (order not verified)")
-else:
-    f_ext, p, gci = np.nan, np.nan, np.nan
+    if len(hs) >= 3:
+        f3, f2, f1 = f0s[0], f0s[1], f0s[2]        # coarse, medium, fine
+        p = np.log(abs((f3 - f2)/(f2 - f1)))/np.log(2.0)
+        f_ext = f1 + (f1 - f2)/(2**p - 1)
+        gci = 1.25*abs((f2 - f1)/f1)/(2**p - 1)
+        print(f"\n=== EXTRAPOLATION (3 grids) ===")
+        print(f"  observed order p     = {p:.3f}")
+        print(f"  extrapolated f0      = {f_ext:.2f} Hz")
+        print(f"  GCI uncertainty      = {gci*100:.2f} %")
+    elif len(hs) == 2:
+        f2, f1 = f0s[0], f0s[1]
+        f_ext = f1 + (f1 - f2)          # order 1 assumed (geometric bias)
+        p, gci = 1.0, abs((f1-f2)/f1)
+        print(f"\n=== EXTRAPOLATION (2 grids, order 1 ASSUMED) ===")
+        print(f"  extrapolated f0      = {f_ext:.2f} Hz   (order not verified)")
+    else:
+        f_ext, p, gci = np.nan, np.nan, np.nan
 
-f_theo = f_helm(R_NECK, R_CAV, H_CAV, L_NECK + 0.85*R_NECK + 0.66*R_NECK)
-print(f"\n=== COMPARISON ===")
-print(f"  Helmholtz + end corrections     : {f_theo:.2f} Hz")
-if np.isfinite(f_ext):
-    print(f"  extrapolated f0 (this run)      : {f_ext:.2f} Hz   -> deviation {abs(f_ext-f_theo)/f_theo*100:.2f} %")
-print(f"  harmonic solver (impedance)     : 209.84 Hz")
-
-np.savez("data/convergence_f0.npz", h=hs, f0=f0s, Q=np.array(Qs),
-         f_ext=f_ext, order=p, gci=gci, f_theo=f_theo)
-
-if len(hs) >= 2:
-    fig, ax = plt.subplots(figsize=(6.6, 4.4))
-    ax.plot(hs*1e3, f0s, "o-", color="#1d5480", label="f0 measured (damped-sinusoid fit)")
+    f_theo = f_helm(R_NECK, R_CAV, H_CAV, L_NECK + 0.85*R_NECK + 0.66*R_NECK)
+    print(f"\n=== COMPARISON ===")
+    print(f"  Helmholtz + end corrections     : {f_theo:.2f} Hz")
     if np.isfinite(f_ext):
-        ax.axhline(f_ext, ls="--", color="#1d5480", lw=1,
-                   label=f"extrapolated to h=0: {f_ext:.1f} Hz")
-    ax.axhline(f_theo, ls=":", color="#a8442a", lw=1.4,
-               label=f"corrected Helmholtz: {f_theo:.1f} Hz")
-    ax.set_xlabel("mesh step h (mm)"); ax.set_ylabel("f0 (Hz)")
-    ax.set_title("Mesh convergence of the natural frequency")
-    ax.grid(ls=":"); ax.legend(fontsize=8)
-    fig.tight_layout(); fig.savefig("figures/convergence_f0.png", dpi=110)
-    print("\nFigure: figures/convergence_f0.png")
+        print(f"  extrapolated f0 (this run)      : {f_ext:.2f} Hz   -> deviation {abs(f_ext-f_theo)/f_theo*100:.2f} %")
+    print(f"  harmonic solver (impedance)     : 209.84 Hz")
+
+    np.savez("data/convergence_f0.npz", h=hs, f0=f0s, Q=np.array(Qs),
+             f_ext=f_ext, order=p, gci=gci, f_theo=f_theo)
+
+    if len(hs) >= 2:
+        fig, ax = plt.subplots(figsize=(6.6, 4.4))
+        ax.plot(hs*1e3, f0s, "o-", color="#1d5480", label="f0 measured (damped-sinusoid fit)")
+        if np.isfinite(f_ext):
+            ax.axhline(f_ext, ls="--", color="#1d5480", lw=1,
+                       label=f"extrapolated to h=0: {f_ext:.1f} Hz")
+        ax.axhline(f_theo, ls=":", color="#a8442a", lw=1.4,
+                   label=f"corrected Helmholtz: {f_theo:.1f} Hz")
+        ax.set_xlabel("mesh step h (mm)"); ax.set_ylabel("f0 (Hz)")
+        ax.set_title("Mesh convergence of the natural frequency")
+        ax.grid(ls=":"); ax.legend(fontsize=8)
+        fig.tight_layout(); fig.savefig("figures/convergence_f0.png", dpi=110)
+        print("\nFigure: figures/convergence_f0.png")
+
+
+if __name__ == "__main__":
+    main()

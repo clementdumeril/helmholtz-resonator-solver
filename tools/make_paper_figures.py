@@ -1,10 +1,10 @@
 """
-Regenerate the four figures of paper/paper.pdf from stored data.
+Regenerate the four figures of the earlier write-up of the harmonic study from
+stored data. That write-up (paper/paper.tex) has been replaced by the report in
+paper/main.tex, whose figures come from paper/make_figures.py; the old version
+remains in the git history, and these PNG figures are kept with it.
 
-Until now these figures had no generating script in the repository: they were
-produced by exploratory code that has since been removed, which meant the paper
-could not be rebuilt from the repository alone. This script closes that gap. It
-reads only `data/*.npz` and rewrites:
+The script reads only `data/*.npz` and rewrites:
 
     figures/doe_resonance.png        frequency response at L = 4 cm, h = 2 mm
     figures/scaling_law_gci.png      weighted fit of the two scaling models
@@ -267,9 +267,9 @@ def fig_verification(q_solver):
 
 
 if __name__ == "__main__":
-    print("Regenerating the figures of paper/paper.pdf")
+    print("Regenerating the figures of the earlier harmonic write-up")
     fig_doe_resonance()
     fig_scaling_law()
     q_measured = fig_losses()
     fig_verification(q_measured)
-    print("Done. Rebuild the paper with:  latexmk -pdf paper/paper.tex")
+    print("Done. The current report is built with:  bash paper/build_paper.sh")

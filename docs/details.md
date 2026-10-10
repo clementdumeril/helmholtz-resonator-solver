@@ -1,6 +1,6 @@
 # Details
 
-Supporting material for the [README](../README.md): the axis treatment, the frequency-domain extrapolation, the outer-boundary study, the validation cases, and secondary results from the harmonic notebook.
+Supporting material for the [README](../README.md): the axis treatment, the frequency-domain extrapolation, the outer-boundary study, the validation cases, and secondary results from the harmonic notebook. The full report is [`paper/main.pdf`](../paper/main.pdf).
 
 ## Axis treatment
 
@@ -20,11 +20,13 @@ gci = 1.25 * abs(f1 - f05) / f05 / (2**p - 1)     # 2.0 %
 
 Peaks: 215.74, 209.84 and 206.75 Hz. The time-domain solver extrapolates to 204.60 Hz (`data/convergence_f0.npz`, observed order 0.86, GCI 1.5%), a gap of 0.59%.
 
+Fourth grid (added in October 2026, `verification/control_grid.py`): a 0.25 mm sweep over 203.5–207 Hz puts the peak at 205.18 Hz. The triplet 1 / 0.5 / 0.25 mm gives an observed order of 0.96 and extrapolates to 203.52 Hz with a GCI of 1.0%, 0.06% from the three-grid value. The time-domain extrapolation still rests on three grids; a 0.25 mm time-domain run would take about 8 h on one core.
+
 ## Outer-boundary study
 
 Source: [`studies/radiation_boundaries.py`](../studies/radiation_boundaries.py), data in `data/pml_study.npz`.
 
-With the original sponge layer, the radiation Q of the time-domain solver ranged from 44 to 267 depending on layer strength, thickness and domain size (`data/sponge_sensitivity.npz`), while f0 did not move. I implemented three terminations in one solver and measured each against the same run on a domain three times larger, where no reflection can return within the time window:
+With the original sponge layer, the radiation Q of the time-domain solver ranged from 44 to 267 depending on layer strength, thickness and domain size (`data/sponge_sensitivity.npz`), while f0 did not move. I implemented three terminations in one solver and measured each against the same run on a domain four times larger, where no reflection can return within the time window:
 
 - sponge: a damping term σ·∂p/∂t over a layer. It reflects 44% of the incident amplitude, which explains the factor of six on Q.
 - first-order Mur: ∂p/∂t + c ∂p/∂n = 0 on the outer ring, exact at normal incidence only. 5.6%.
@@ -51,9 +53,9 @@ Q climbs towards the 285.6 given by the analytic radiation impedance (`data/fdm_
 
 Source: [`experiments/literature_validation.py`](../experiments/literature_validation.py) and section 5 of [`notebooks/harmonic_study.ipynb`](../notebooks/harmonic_study.ipynb).
 
-Selamet et al. (1997, J. Acoust. Soc. Am. 102(6)) measured concentric cylindrical resonators as side branches on a duct. At resonance the input impedance of the neck vanishes, so the mouth is a pressure-release (Dirichlet) boundary rather than a radiating one; the notebook models that configuration. Results at h = 1 mm: 93.0 Hz against 91 Hz (2.2%) and 72.7 Hz against 72 Hz (0.9%), with no fitted parameter.
+Selamet et al. (1997, J. Acoust. Soc. Am. 101(1), 41–51) measured concentric cylindrical resonators as side branches on a duct. At resonance the input impedance of the neck vanishes, so the mouth is a pressure-release (Dirichlet) boundary rather than a radiating one; the notebook models that configuration. Results at h = 1 mm: 93.0 Hz against 91 Hz (2.2%) and 72.7 Hz against 72 Hz (0.9%), with no fitted parameter.
 
-Indenbom & Pogossian (2023, Acta Acustica 7, 30) measured a 100 mL Erlenmeyer flask at 351 Hz where their lumped formula gives 391 Hz. My lumped model reproduces their 391 Hz to 0.1%. The finite-difference solver, with the flask replaced by a cylinder of equal volume, gives 387–396 Hz across every aspect ratio tried, so resolving the field near the neck does not close the gap. The discrepancy corresponds to an effective neck about 54 mm long instead of 43 mm, which would fit a neck flaring into a conical shoulder; my cylindrical cavity cannot represent that.
+Indenbom & Pogossian (2023, Acta Acustica 7, 51) measured a 100 mL Erlenmeyer flask at 351 Hz where their lumped formula gives 391 Hz. My lumped model reproduces their 391 Hz to 0.1%. The finite-difference solver, with the flask replaced by a cylinder of equal volume, gives 387–396 Hz across every aspect ratio tried, so resolving the field near the neck does not close the gap. The discrepancy corresponds to an effective neck about 54 mm long instead of 43 mm, which would fit a neck flaring into a conical shoulder; my cylindrical cavity cannot represent that.
 
 For damping, the only open-access half-width I found for a resonator with fully stated geometry is in the same paper. It gives Q between 18 and 30, a range because the paper does not state whether the width is taken at half amplitude or half power. I predict about 40. The model is optimistic about damping, as Moloney (2004) also reports. The script's loss estimate for the flask gives Q_visc ≈ 52 for viscothermal friction in the neck and Q_rad ≈ 167 for radiation, so the viscothermal loss is about three times the radiation loss, and neither solver resolves it.
 
@@ -64,4 +66,4 @@ For damping, the only open-access half-width I found for a resonator with fully 
 - End-correction decomposition: the radiation impedance shifts ΔL by 0.823a, against 8a/(3π) = 0.849a (3.1%). This is a consistency check, since that reactance is imposed.
 - Losses: viscothermal friction in the neck gives Q ≈ 47; bulk absorption is negligible (Q ~ 10⁶).
 
-A longer write-up of the harmonic study, with the derivations, is in [`paper/paper.pdf`](../paper/paper.pdf).
+Full report, with the formulation, the verification and the comparison with published measurements: [`paper/main.pdf`](../paper/main.pdf).
