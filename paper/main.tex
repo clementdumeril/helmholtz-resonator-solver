@@ -13,6 +13,7 @@
 \usepackage{microtype}
 \usepackage[hidelinks]{hyperref}
 \usepackage{xurl}
+\usepackage[title]{appendix}
 
 \graphicspath{{figures/}}
 
@@ -21,8 +22,6 @@
 % Fourth-grid results exist only once data/fdm_sweep_h0.25.npz has been produced
 \providecommand{\fOrderB}{--}\providecommand{\fExtB}{--}\providecommand{\fGCIB}{--}
 \providecommand{\fExtShift}{--}\providecommand{\fFD}{--}
-
-\newcommand{\dd}{\mathrm{d}}
 
 \title{Two independent finite-difference solvers for an open Helmholtz resonator:
 verification and comparison with published measurements}
@@ -45,15 +44,16 @@ the radiation impedance of a baffled piston, and a time-domain leapfrog solver t
 the exterior half-space and lets the resonator select its own frequency after a broadband
 pulse. Manufactured solutions give observed orders of \mmsHarmonicOrder{} and
 \mmsTransientOrder{}; the time-domain test also exposed a half-cell offset of the rigid
-walls, an $O(h)$ geometric error that has to be extrapolated away. With Richardson
-extrapolation the two solvers give \fExt{} and \tExt{}~Hz (grid convergence index
-\fGCI\% and \tGCI\%), a \solverGap\% gap. A study of three outer boundaries shows that
-the original sponge layer reflected \reflSponge\% of the incident wave, which explained a
-factor-six spread in the computed radiation $Q$. Compared with published measurements, the
-solver reproduces two resonators of Selamet et al.\ to 0.9\% and 2.2\% with no fitted
-parameter, and misses an Erlenmeyer flask by 10--13\%. The solvers are lossless, so damping
-is not predicted. A training-free test also shows that neural bases fit the field to
-better than 0.4\% yet leave PDE residuals thousands of times larger than the zero field.
+walls, an $O(h)$ geometric error that is removed here by Richardson extrapolation. The two
+solvers then give \fExt{} and \tExt{}~Hz, with grid uncertainties (GCI) of \fGCI\% and
+\tGCI\% and a further \fZeroSpread\% from the outer boundary of the time-domain solver; they
+differ by \solverGap\%. A study of three outer boundaries shows that the original sponge
+layer reflected \reflSponge\% of the incident wave, which explained a factor-six spread in
+the computed radiation $Q$. Compared with published measurements, the solver is within
+0.9\% and 2.2\% of two resonators of Selamet et al.\ with no fitted parameter, and is
+10--13\% above an Erlenmeyer flask. The solvers are lossless, so damping is not predicted.
+A training-free test shows that neural bases fit the field to better than 0.4\% while the
+PDE residual of that fit is \basesResMin--\basesResMax{} times that of the zero field.
 \end{abstract}
 
 % ===========================================================================
@@ -82,9 +82,9 @@ agreeing with measurements? The contributions are:
   \item a verification sequence (manufactured solutions, Richardson extrapolation with a
     grid convergence index, cross-solver comparison, outer-boundary study) in which the
     manufactured solution revealed a half-cell offset of the rigid walls;
-  \item a comparison with three published measured resonators, two reproduced and one
-    missed, and a training-free measurement of how well neural bases represent the verified
-    field and its PDE residual.
+  \item a comparison with three published measured resonators, two matched and one missed,
+    and a training-free measurement of how well neural bases represent the computed field
+    and its PDE residual (Appendix~\ref{app:bases}).
 \end{itemize}
 
 % ===========================================================================
@@ -118,12 +118,10 @@ unsplit second-order form for the scalar wave equation with two auxiliary fields
 
 \paragraph{Neural PDE solvers.}
 Physics-informed neural networks minimise the PDE residual over the parameters of a
-network \citep{raissi2019}. Their difficulties on oscillatory problems are usually attributed
+network \citep{raissi2019}. Their difficulties on oscillatory problems are often attributed
 to spectral bias \citep{rahaman2019,wang2021}, with remedies such as sine activations
 \citep{sitzmann2020} and domain decomposition \citep{moseley2023}. Trefftz methods use
 functions that satisfy the homogeneous Helmholtz equation exactly \citep{hiptmair2016}.
-Section~\ref{sec:bases} tests the spectral-bias explanation on this problem without
-training a network.
 
 % ===========================================================================
 \section{Problem formulation}
@@ -131,8 +129,8 @@ training a network.
 
 \paragraph{Geometry.} The resonator is axisymmetric (Table~\ref{tab:params}): a cylindrical
 neck of radius $a=10$~mm and length $L=40$~mm opens at $z=0$ into a rigid baffle and joins a
-cylindrical cavity of radius 40~mm and height 80~mm. All walls are rigid. The air is lossless,
-with $c=343$~m/s and $\rho=1.204$~kg/m$^3$.
+cylindrical cavity of radius $R_c=40$~mm and height 80~mm. All walls are rigid. The air is
+lossless, with $c=343$~m/s and $\rho=1.204$~kg/m$^3$.
 
 \begin{table}[t]
 \centering
@@ -144,12 +142,12 @@ with $c=343$~m/s and $\rho=1.204$~kg/m$^3$.
  & quantity & value \\
 \midrule
 geometry & neck radius $a$ / length $L$ & 10 / 40 mm \\
- & cavity radius / height & 40 / 80 mm \\
+ & cavity radius $R_c$ / height & 40 / 80 mm \\
 air & $c$, $\rho$ & 343 m/s, 1.204 kg/m$^3$ \\
 frequency domain & volume source (Gaussian, cavity centre) & width 10 mm \\
  & peak search & 0.05 Hz steps, 3-point parabola \\
 time domain & exterior (radius $\times$ depth) & 120 $\times$ 100 mm \\
- & absorbing layer thickness & 30 mm \\
+ & absorbing layer & sponge, 30 mm \\
  & source & Ricker, 250 Hz centre, at $z=-55$ mm \\
  & time step & $\Delta t = 0.5\,h/(c\sqrt2)$ \\
  & simulated time; fit window & 250 ms; $t \ge 45$ ms \\
@@ -165,8 +163,7 @@ grids & $h$ & 2, 1, 0.5 (0.25) mm \\
   \nabla^2 p = \partial_r^2 p + \frac{1}{r}\partial_r p + \partial_z^2 p ,
   \label{eq:wave}
 \end{equation}
-and in the frequency domain, for a time dependence at angular frequency $\omega$ and
-$k=\omega/c$,
+and in the frequency domain, at angular frequency $\omega$ and $k=\omega/c$,
 \begin{equation}
   \nabla^2 p + k^2 p = -F(\mathbf{x}) .
   \label{eq:helmholtz}
@@ -176,8 +173,8 @@ L'H\^opital's rule gives $(1/r)\,\partial_r p \to \partial_r^2 p$, so
 $\nabla^2 p = 2\,\partial_r^2 p + \partial_z^2 p$ at $r=0$. Rigid walls impose
 $\partial_n p = 0$.
 
-\paragraph{Radiation.} The two solvers model the exterior differently, which is what makes
-their comparison informative. The frequency-domain solver stops at the mouth and applies the
+\paragraph{Radiation.} The two solvers model the exterior differently, so their agreement
+tests the radiation model. The frequency-domain solver stops at the mouth and applies the
 low-frequency impedance of a baffled piston \citep{morse1968},
 \begin{equation}
   Z_r = \rho c\left[\tfrac12 (ka)^2 + \mathrm{i}\,\tfrac{8}{3\pi} ka\right],
@@ -189,11 +186,13 @@ $8a/(3\pi)$, so this solver imposes the exterior part of $\Delta L$. The time-do
 meshes a baffled exterior half-space and computes the whole end correction; its outer
 boundary has to absorb the outgoing wave.
 
-\paragraph{Reference value.} For comparison, Eq.~\eqref{eq:lumped} is evaluated with
-$\Delta L = 0.85a + 0.66a = 1.51a$: the flanged exterior correction \citep{rayleigh1896}
-plus an interior correction of $0.66a$, close to the $0.67a$ fitted with the Dirichlet mouth
-in Section~\ref{sec:gci}. This gives
-$f_0 = \fTheo$~Hz. It is a semi-empirical reference, not an independent measurement.
+\paragraph{Reference values.} Two lumped references are used, and neither is a measurement.
+(i) $\Delta L = 0.85a + 0.66a = 1.51a$, the flanged exterior correction \citep{rayleigh1896}
+plus an interior correction of $0.66a$, which gives $f_0=\fTheo$~Hz. The $0.66a$ is close to
+the $0.67a$ fitted with this solver's own Dirichlet-mouth runs (Appendix~\ref{app:neck}), so
+agreement with this reference is partly circular. (ii) Ingard's interior correction
+$0.85a\,(1-1.25\,a/R_c) = \dLIngardInt a$ \citep{ingard1953} with the same exterior term gives
+$\Delta L = \dLIngard a$ and $f_0 = \fIngard$~Hz, independent of this work.
 
 % ===========================================================================
 \section{Numerical method}
@@ -206,7 +205,7 @@ $f_0 = \fTheo$~Hz. It is a semi-empirical reference, not an independent measurem
   meshed exterior with a rigid baffle at $z=0$, absorbing layer (shaded) on the outer
   boundaries, Ricker source (star) and the three probes (dots). (b) Frequency-domain solver:
   the domain stops at the mouth, which carries the radiation impedance; colour shows $|p|$
-  at 209.84~Hz on the 0.5~mm grid (\texttt{data/helmholtz\_mode.npz}).}
+  at 209.84~Hz on the 0.5~mm grid.}
   \label{fig:domains}
 \end{figure}
 
@@ -214,36 +213,34 @@ Both solvers use a uniform grid of step $h$ on the meridian plane (Fig.~\ref{fig
 and the standard second-order stencil of the axisymmetric Laplacian, with the radial
 part written as $4(p_1-p_0)/h^2$ on the axis.
 
-\paragraph{Frequency domain} (\texttt{src/harmonic\_solver.py}). The operator of
-Eq.~\eqref{eq:helmholtz} is assembled as a sparse complex matrix. A rigid wall is imposed by
-folding the ghost node onto the diagonal: the coefficient of the missing neighbour is added
-to the diagonal instead of appearing off-diagonal, which enforces a zero flux across the
-face half a cell beyond the last fluid node. The Robin condition at the mouth eliminates the
-ghost node through $p_{-1} = p_1 - 2h\alpha p_0$. Because $k^2$ and $\alpha$ depend on
-$\omega$, each frequency requires a new sparse LU factorisation (SciPy \texttt{spsolve}):
-0.1~s on the 1~mm grid (4\,961 nodes), 4~s on the 0.25~mm grid (77\,441 nodes). A Gaussian
-volume source of width 10~mm drives the cavity; $f_0$ is the peak of the cavity pressure,
-located by a three-point parabola on a 0.05~Hz sweep, and the radiation $Q$ is $f_0$ over the
-$-3$~dB width. A second configuration of the same scheme, with the mouth set to $p=1$
-(Dirichlet), is used in \texttt{notebooks/harmonic\_study.ipynb} for the neck-length study and
-for Selamet's side-branch resonators, whose mouth is a pressure node at resonance.
+\paragraph{Frequency domain.} The operator of Eq.~\eqref{eq:helmholtz} is assembled as a
+sparse complex matrix. A rigid wall is imposed by folding the ghost node onto the diagonal:
+the coefficient of the missing neighbour is added to the diagonal instead of appearing
+off-diagonal, which enforces a zero flux across the face half a cell beyond the last fluid
+node. The Robin condition at the mouth eliminates the ghost node through
+$p_{-1} = p_1 - 2h\alpha p_0$. Because $k^2$ and $\alpha$ depend on $\omega$, each frequency
+requires a new sparse LU factorisation (SciPy): 0.1~s on the 1~mm grid (4\,961 nodes), 4~s on
+the 0.25~mm grid (77\,441 nodes). A Gaussian volume source of width 10~mm drives the cavity;
+$f_0$ is the peak of the cavity pressure, located by a three-point parabola on a 0.05~Hz
+sweep, and the radiation $Q$ is $f_0$ over the $-3$~dB width. A second configuration of the
+same scheme, with the mouth set to $p=1$ (Dirichlet), is used for the neck-length study and
+for Selamet's side-branch resonators.
 
-\paragraph{Time domain} (\texttt{src/transient\_solver.py}). Equation~\eqref{eq:wave} is
-advanced by explicit leapfrog with $\Delta t = 0.5\,h/(c\sqrt2)$. The Laplacian is written in
-masked finite volumes: fluxes through faces between a fluid and a solid cell are zero, which
-again places each wall on the face half a cell beyond the last node. The neck opens onto an
-exterior of radius 120~mm and depth 100~mm terminated by 30~mm absorbing layers. A Ricker
-pulse centred at 250~Hz is emitted 55~mm in front of the mouth, so the resonator is excited
-over a broad band and rings at its own frequency after the pulse has passed. $f_0$ and $Q$
-are obtained by fitting $A e^{-t/\theta}\cos(2\pi f_0 t+\phi)$ to the cavity probe for
-$t \ge 45$~ms (\texttt{verification/grid\_convergence.py}), with $Q = \pi f_0 \theta$. The fit
-locates $f_0$ well below the 4.9~Hz resolution of an FFT over the same window.
+\paragraph{Time domain.} Equation~\eqref{eq:wave} is advanced by explicit leapfrog with
+$\Delta t = 0.5\,h/(c\sqrt2)$. The Laplacian is written in masked finite volumes: fluxes
+through faces between a fluid and a solid cell are zero, which again places each wall on the
+face half a cell beyond the last node. The neck opens onto an exterior of radius 120~mm and
+depth 100~mm terminated by 30~mm sponge layers. A Ricker pulse centred at 250~Hz is emitted
+55~mm in front of the mouth, so the resonator is excited over a broad band and rings at its
+own frequency after the pulse has passed. $f_0$ and $Q$ are obtained by fitting
+$A e^{-t/\theta}\cos(2\pi f_0 t+\phi)$ to the cavity probe for $t \ge 45$~ms, with
+$Q = \pi f_0 \theta$. The fit locates $f_0$ well below the 4.9~Hz resolution of an FFT over
+the same window.
 
-\paragraph{Outer boundaries} (\texttt{studies/radiation\_boundaries.py}). Three terminations
-share one solver core: (i) a sponge, i.e.\ a damping term $\sigma\,\partial_t p$ with
-$\sigma = \sigma_{\max} d^2$ across the layer, as in the original solver; (ii) the
-first-order Mur condition $\partial_t p + c\,\partial_n p = 0$ on the outer ring
-\citep{mur1981}; (iii) the unsplit PML \citep{grote2010}
+\paragraph{Outer boundaries.} Three terminations share one solver core: (i) a sponge, i.e.\
+a damping term $\sigma\,\partial_t p$ with $\sigma = \sigma_{\max} d^2$ across the layer, as
+in the solver above; (ii) the first-order Mur condition $\partial_t p + c\,\partial_n p = 0$
+on the outer ring \citep{mur1981}; (iii) the unsplit PML \citep{grote2010}
 \begin{equation}
 \begin{aligned}
   \partial_t^2 p + (s_r+s_z)\,\partial_t p + s_r s_z\, p &= c^2\nabla^2 p + \nabla\cdot\boldsymbol{\psi},\\
@@ -253,17 +250,6 @@ first-order Mur condition $\partial_t p + c\,\partial_n p = 0$ on the outer ring
 \end{equation}
 with quadratic profiles $s_r$, $s_z$. This is the Cartesian stretch applied in the $(r,z)$
 plane: the $1/r$ term of a cylindrical PML \citep{collino1998} is left out.
-
-\paragraph{Neural-basis test} (\texttt{studies/neural\_basis\_benchmark.py}). For each family
-of \basesHidden{} functions $\phi_j$ at random initialisation (tanh MLP, SIREN with
-$\omega_0=5$ and 8, Gabor atoms, a three-zone partition of unity of sine networks in the
-spirit of FBPINNs, and a Trefftz basis $J_0(\kappa_m r)Z_m(z)$), the frequency-domain field
-$P$ at 209.84~Hz on the 1~mm grid is projected onto the span of $\{\phi_j\}$ by least
-squares. Two numbers are reported: the relative field error of that projection, and the
-residual $\lVert \nabla^2\tilde p + k^2 \tilde p + F\rVert / \lVert F\rVert$ of the
-projection $\tilde p$ computed with automatic differentiation on 900 points of the fluid domain. A
-residual of 100\% is what the zero field achieves. No network is trained in this test: it
-measures the best that a basis allows, not what an optimiser finds.
 
 % ===========================================================================
 \section{Verification}
@@ -275,9 +261,9 @@ measures the best that a basis allows, not what an optimiser finds.
   \centering
   \includegraphics[width=\textwidth]{fig_mms.pdf}
   \caption{Manufactured solutions. (a) Frequency-domain scheme on a smooth domain with
-  Dirichlet edges (\texttt{data/mms\_results.npz}). (b) Time-domain scheme with rigid walls
-  (\texttt{data/mms\_transient.npz}): matched to the nominal wall position the error
-  converges at first order; matched to the wall at $R+h/2$ it converges at second order.}
+  Dirichlet edges. (b) Time-domain scheme with rigid walls: matched to the nominal wall
+  position the error converges at first order; matched to the wall at $R+h/2$ it converges
+  at second order.}
   \label{fig:mms}
 \end{figure}
 
@@ -285,19 +271,23 @@ For the frequency-domain scheme, the solution $p_e=\cos(\pi r/R)\cos(\pi z/H)$ o
 $40\times120$~mm rectangle, regular on the axis, is imposed through its source term at the
 wavenumber of 235~Hz. Over four grids from 4 to 0.5~mm the RMS error decreases at order
 \mmsHarmonicOrder{} (Fig.~\ref{fig:mms}a). This test uses Dirichlet edges and therefore does
-not exercise the wall treatment.
+not exercise the wall or mouth treatment.
 
-The time-domain test does. It uses $p = J_0(\lambda r)\cos\!\big(k_z(z+z_0)\big)\,T(t)$ in a
-closed cylinder, with $\lambda$ chosen so that $\partial_r p=0$ on the lateral wall and $k_z$
-so that $\partial_z p = 0$ on both ends, and $T(t)=u^3e^{-u}$, $u=t/\tau$, with $\tau$ matched
-to the wave period so that $\partial_t^2 p$ and $c^2\nabla^2 p$ are of the same size.
-When the manufactured solution places the walls at the nominal radius $R$ and height $H$,
-the observed order is \mmsNominalOrder{} on four grids (Fig.~\ref{fig:mms}b). When it places
-them at $R+h/2$ and $H+h$, the observed order is \mmsTransientOrder{} and the error at
-$h=2$~mm is \mmsErrorRatio{} times smaller. The scheme is second order; the first-order error
+The time-domain test does exercise the walls. It uses
+$p = J_0(\lambda r)\cos\!\big(k_z(z+z_0)\big)\,T(t)$ in a closed cylinder, with $\lambda$
+chosen so that $\partial_r p=0$ on the lateral wall and $k_z$ so that $\partial_z p = 0$ on
+both ends, and $T(t)=u^3e^{-u}$, $u=t/\tau$, with $\tau$ matched to the wave period so that
+$\partial_t^2 p$ and $c^2\nabla^2 p$ are of the same size. When the manufactured solution
+places the walls at the nominal radius $R$ and height $H$, the observed order is
+\mmsNominalOrder{} on four grids (Fig.~\ref{fig:mms}b). When it places them at $R+h/2$ and
+$H+h$, the observed order is \mmsTransientOrder{} and the error at $h=2$~mm is
+\mmsErrorRatio{} times smaller. The interior scheme is second order; the first-order error
 comes from the wall position. The frequency-domain scheme has the same convention through
 its ghost-node folding. Both solvers therefore simulate a resonator whose dimensions are
-enlarged by $O(h)$, and raw frequencies at a single grid carry a bias of a few percent.
+enlarged by $O(h)$, and the full discretisation of the resonator is first order in $h$ by
+construction. Aligning the cell faces with the nominal walls would remove this term and
+should restore second order; it was not done here, and the offset is handled by
+extrapolation instead.
 
 \subsection{Solution verification: grid convergence}
 \label{sec:gci}
@@ -305,9 +295,9 @@ enlarged by $O(h)$, and raw frequencies at a single grid carry a bias of a few p
 \begin{figure}[t]
   \centering
   \includegraphics[width=0.66\textwidth]{fig_convergence.pdf}
-  \caption{Natural frequency of the reference resonator against grid step for both solvers
-  (\texttt{data/convergence\_f0.npz}, \texttt{data/fdm\_sweep\_h*.npz}), with the Richardson
-  extrapolations at $h=0$ and their GCI, and the semi-empirical lumped reference.}
+  \caption{Natural frequency of the reference resonator against grid step for both solvers,
+  with the Richardson extrapolations at $h=0$ and their GCI, and the semi-empirical lumped
+  reference (i).}
   \label{fig:convergence}
 \end{figure}
 
@@ -318,18 +308,15 @@ the fine-grid GCI are \citep{roache1994,celik2008}
   f_{h\to0} = f_1 + \frac{f_1-f_2}{2^p-1},\quad
   \mathrm{GCI} = 1.25\,\frac{|f_2-f_1|/f_1}{2^p-1},
 \end{equation}
-with $f_1$ on the finest grid. Table~\ref{tab:gci} and Fig.~\ref{fig:convergence} give the
-result on the reference geometry. Both solvers converge at an observed order close to 1,
-as expected from the wall offset and from the staircase representation of the neck--cavity
-junction. Extrapolated, they give \fExtPrec{} and \tExtPrec{}~Hz, \solverGapPrec\% apart,
-which is inside both uncertainty bands. Their raw 1~mm values already agree to 0.3\%, but
-both carry the same geometric bias, so that agreement alone says little; only the
-extrapolated values are compared.
+with $f_1$ on the finest grid. Since the expected order is 1, successive differences should
+halve with each refinement. The ratios of successive differences are \fRatioA{} and
+\fRatioB{} for the frequency-domain solver and \tRatioA{} for the time-domain solver, close
+to 2, so the three-grid GCI with a safety factor of 1.25 is applicable.
 
 \begin{table}[t]
 \centering
 \caption{Grid convergence of $f_0$ (Hz) on the reference geometry. Time domain:
-damped-sinusoid fit; frequency domain: peak of the response.}
+damped-sinusoid fit (sponge layer); frequency domain: peak of the response.}
 \label{tab:gci}
 \small
 \begin{tabular}{lccccccc}
@@ -343,21 +330,19 @@ frequency domain (impedance) & \fFA & \fFB & \fFC & \fFD & \fOrder & \fExtPrec &
 \end{tabular}
 \end{table}
 
-\paragraph{Fourth grid.} Three grids give exactly one observed order, so they cannot show
-that the solution is in the asymptotic range. For the frequency-domain solver I added a
-0.25~mm grid (\texttt{verification/control\_grid.py}). The second triplet gives $p=\fOrderB$
-and moves the extrapolated value by \fExtShift\%, well inside the GCI. The same check was
-done in the harmonic notebook with the Dirichlet mouth for $L=2$ and 4~cm: the observed
-order goes from 0.91 to 1.00 and from 0.87 to 1.01, and the extrapolations move by 0.20\% and
-0.36\%. A 0.25~mm time-domain run would take about 8~h on one core and was not done; the
-time-domain extrapolation therefore rests on three grids.
+Table~\ref{tab:gci} and Fig.~\ref{fig:convergence} give the results. For the
+frequency-domain solver a fourth grid at 0.25~mm gives a second triplet with $p=\fOrderB$;
+it moves the extrapolated value by \fExtShift\%, well inside the GCI. A 0.25~mm time-domain
+run would take about 8~h on one core and was not done, so the time-domain extrapolation rests
+on three grids.
 
-\paragraph{Neck length.} With the Dirichlet mouth, the same three-grid study over five neck
-lengths from 2 to 6~cm gives observed orders between 0.87 and 0.95 and GCIs between 2.0\%
-and 2.3\% (mean 2.1\%; \texttt{notebooks/harmonic\_study.ipynb}, section 4). Fitted on those
-extrapolated frequencies, a free power law $AL^b$ and the effective-length model
-$A/\sqrt{L+\Delta L}$ cannot be told apart ($\Delta\mathrm{AICc}=0.3$); the effective-length
-fit gives $\Delta L = 0.67a$, the interior correction used in the reference value.
+\paragraph{Uncertainty budget.} The time-domain runs of Table~\ref{tab:gci} use the sponge
+layer. With the same grid (1~mm) and the three terminations of Section~\ref{sec:pml}, $f_0$
+spreads over \fZeroSpread\%, which is added to its uncertainty. The two extrapolated values,
+$\tExtPrec \pm \tGCI\%$ (grid) $\pm \fZeroSpread\%$ (outer boundary) and
+$\fExtPrec \pm \fGCI\%$ (grid), differ by \solverGapPrec\%, inside both bands. Their raw 1~mm
+values agree to 0.3\%, but both carry the same wall offset, so that agreement alone says
+little; only the extrapolated values are compared.
 
 \subsection{Outer boundary of the time-domain solver}
 \label{sec:pml}
@@ -365,32 +350,41 @@ fit gives $\Delta L = 0.67a$, the interior correction used in the reference valu
 \begin{figure}[t]
   \centering
   \includegraphics[width=\textwidth]{fig_boundaries.pdf}
-  \caption{Outer boundaries (\texttt{data/pml\_study.npz}). (a) Spurious reflection of a
-  4~kHz-centred Ricker pulse, measured at an off-axis probe against the same run on a domain
-  four times larger. (b) Radiation $Q$ of the resonator as the exterior grows, against the
-  $Q$ of the frequency-domain solver with the analytic impedance.}
+  \caption{Outer boundaries. (a) Spurious reflection of a 4~kHz-centred Ricker pulse,
+  measured at an off-axis probe against the same run on a domain four times larger.
+  (b) Radiation $Q$ of the resonator (1~mm grid) against exterior depth. Configuration B
+  (open symbols) changes only the depth, at a fixed radius of 12~cm; configuration C
+  (filled) grows the radius with the depth ($0.8\times$ depth, at least 12~cm). Dotted line:
+  $Q$ of the frequency-domain solver with the analytic impedance, 1~mm grid.}
   \label{fig:boundaries}
 \end{figure}
 
-The frequency was insensitive to the outer boundary, but the damping was not: with the
-original sponge layer, the radiation $Q$ ranged from \spongeQmin{} to \spongeQmax{} as the
-layer strength, thickness and domain size were changed on the 2~mm grid, while $f_0$ did not
-move (\texttt{data/sponge\_sensitivity.npz}). To find out why, each termination was tested
-on an empty exterior box: a pulse is fired towards the boundary and the probe signal is
-compared with the same run on a domain four times larger, from which nothing can return
-within the 1.4~ms window. The difference is the spurious reflection, with no analytic
-reference needed.
+With the original sponge layer, the radiation $Q$ ranged from \spongeQmin{} to \spongeQmax{}
+as the layer strength, thickness and domain size were changed on the 2~mm grid. (The $f_0$
+recorded in that study came from an FFT with a 4~Hz bin and cannot show whether the frequency
+moved.) To find out why, each termination was tested on an empty exterior box: a pulse is
+fired towards the boundary and the probe signal is compared with the same run on a domain
+four times larger, from which nothing can return within the 1.4~ms window. The difference is
+the spurious reflection, with no analytic reference needed.
+
+The sponge reflected \reflSponge\% of the incident amplitude (Table~\ref{tab:pml},
+Fig.~\ref{fig:boundaries}a), enough to explain the spread in $Q$. The PML reflects
+\reflPmlDefault\% at the default strength and \reflPml\% after scanning it. Running each wall
+alone isolates its limit: \reflFlat\% ($\reflFlatdB$~dB) on the flat boundary
+$z=\mathrm{const}$, where the Cartesian stretch is exact, and \reflCurved\%
+($\reflCurveddB$~dB) on the cylindrical boundary, where the $1/r$ term is missing. Neither a
+stronger profile nor a thicker layer lowers that floor.
 
 \begin{table}[t]
 \centering
 \caption{Outer-boundary treatments. Reflection: peak spurious signal relative to the peak
 incident signal. Drift: change in the radiation $Q$ of the resonator (1~mm grid) when the
-exterior depth goes from 10 to 18~cm.}
+exterior depth goes from 10 to 18~cm at a fixed radius of 12~cm (configuration B).}
 \label{tab:pml}
 \small
 \begin{tabular}{lcc}
 \toprule
-treatment & spurious reflection & $Q$ drift, 10 $\to$ 18 cm \\
+treatment & spurious reflection & $Q$ drift, depth 10 $\to$ 18 cm, radius 12 cm \\
 \midrule
 sponge layer (original solver) & \reflSponge\% & $\driftSponge$\% \\
 first-order Mur & \reflAbc\% & $\driftAbc$\% \\
@@ -399,22 +393,20 @@ PML (tuned strength) & \reflPml\% & $\driftPml$\% \\
 \end{tabular}
 \end{table}
 
-The sponge reflected \reflSponge\% of the incident amplitude (Table~\ref{tab:pml},
-Fig.~\ref{fig:boundaries}a), enough to explain the spread in $Q$. The PML reflects
-\reflPmlDefault\% at the default strength and \reflPml\% after scanning it, and its $Q$ moves
-by $\driftPml$\% between the two exterior sizes, against $\driftSponge$\% for the sponge and
-$\driftAbc$\% for the Mur condition. Running each wall alone isolates the limit of the PML:
-\reflFlat\% ($\reflFlatdB$~dB) on the flat boundary $z=\mathrm{const}$, where the Cartesian
-stretch is exact, and \reflCurved\% ($\reflCurveddB$~dB) on the cylindrical boundary, where
-the $1/r$ term is missing. Neither a stronger profile nor a thicker layer lowers that floor.
-
-A stable $Q$ between 10 and 18~cm is still not convergence. At 209~Hz the wavelength is
-\wavelength~m, so the 10~cm exterior is \extFracA{} of a wavelength and the layer sits in the
-reactive near field of the mouth. Growing the exterior to \extFracB, \extFracC{} and
-\extFracD{} wavelengths takes $Q$ from \extQA{} to \extQB, \extQC{} and \extQD{}
-(Fig.~\ref{fig:boundaries}b), approaching the $Q=\qImpedance$ of the frequency-domain solver
-with the analytic impedance, while $f_0$ changes by \extFspread\%. The largest run is
-consistent with convergence towards that value but does not demonstrate it.
+The resonator was then run in two configurations (Fig.~\ref{fig:boundaries}b). In
+configuration B only the depth changes, from 10 to 18~cm, at a fixed radius of 12~cm. The
+PML $Q$ moves by $\driftPml$\%, against $\driftSponge$\% for the sponge and $\driftAbc$\% for
+the Mur condition. This only shows that $Q$ is insensitive to the position of the flat
+boundary, where the PML is nearly exact. In configuration C the radius grows with the depth
+(12, \extRB, \extRC{} and \extRD~cm). At 18~cm depth, moving the cylindrical boundary from 12
+to \extRB~cm raises the PML $Q$ from \pmlQdeepB{} to \pmlQdeepC{} ($\pmlRadiusJump$\%): the
+curved boundary, which carries the 4\% floor, still controls the damping. Over configuration
+C, with the exterior growing from \extFracA{} to \extFracB, \extFracC{} and \extFracD{}
+wavelengths (the wavelength is \wavelength~m at 209~Hz), $Q$ goes from \extQA{} to \extQB,
+\extQC{} and \extQD, towards the $Q=\qImpedance$ of the frequency-domain solver on the 1~mm
+grid (\qImpHalf{} and \qImpQuarter{} on the 0.5 and 0.25~mm grids). The time-domain radiation
+$Q$ is therefore not converged. The frequency moves less: \fZeroSpread\% across the three
+terminations in configuration B and \extFspread\% over configuration C.
 
 % ===========================================================================
 \section{Results}
@@ -426,26 +418,26 @@ consistent with convergence towards that value but does not demonstrate it.
   \centering
   \includegraphics[width=\textwidth]{fig_resonance.pdf}
   \caption{(a) Time-domain solver, 1~mm grid: the pulse reaches the exterior probe, then the
-  cavity keeps oscillating at its own frequency (\texttt{data/open\_resonator.npz}).
-  (b) Frequency-domain response of the cavity on successive grids
-  (\texttt{data/fdm\_sweep\_h*.npz}); the peak moves down as the walls move in.}
+  cavity keeps oscillating at its own frequency. (b) Frequency-domain response of the cavity
+  on successive grids; the peak moves down as the walls move in.}
   \label{fig:resonance}
 \end{figure}
 
 In the time domain the resonator selects its frequency: after the pulse has passed, the
 cavity rings at $f_0$ with no frequency imposed anywhere (Fig.~\ref{fig:resonance}a). In
-the frequency domain the response is narrow: on the 1~mm grid the $-3$~dB width is \sweepBand~Hz. A first sweep at 1~Hz steps
-read the peak at \sweepPeakCoarse~Hz and \sweepAmpCoarse~kPa; at 0.005~Hz steps it is
-\sweepPeakFine~Hz and \sweepAmpFine~kPa, a 9\% error in amplitude because the step was wider
-than the peak.
+the frequency domain the response is narrow, with a $-3$~dB width of \sweepBand~Hz on the
+1~mm grid (Fig.~\ref{fig:resonance}b).
 
 Inverting Eq.~\eqref{eq:lumped} gives the end correction implied by each frequency. From the
-raw 1~mm time-domain value it is \dLraw$a$, 15\% below the $1.51a$ of the reference; from
-the extrapolated value it is \dLext$a$, about 3\% above it. The apparent deficit of the
-meshed exterior was the wall offset. With the impedance condition, the frequency-domain
-study gives a shift in $\Delta L$ of $0.823a$ between the Dirichlet and the radiating mouth,
-against $8a/(3\pi)=0.849a$ in Eq.~\eqref{eq:zr}. Since that reactance is imposed, this is a
-consistency check of the chain, not an independent computation.
+raw 1~mm time-domain value it is \dLraw$a$, \dLrawGap\% below the $1.51a$ of reference (i);
+from the extrapolated value it is \dLext$a$. The \dLrawGap\% deficit at 1~mm is the wall
+offset. The extrapolated value is \dLextGap\% above reference (i), which is partly circular,
+and \dLextGapIngard\% above Ingard's \dLIngard$a$ (reference (ii)); in frequency, both
+extrapolated solvers lie \tGapIngard--\fGapIngard\% below the Ingard value of \fIngard~Hz.
+With the impedance condition, the frequency-domain study gives a shift in $\Delta L$ of
+$0.823a$ between the Dirichlet and the radiating mouth, against $8a/(3\pi)=0.849a$ in
+Eq.~\eqref{eq:zr}. Since that reactance is imposed, this is a consistency check of the chain,
+not an independent computation.
 
 \subsection{Comparison with published measurements}
 \label{sec:published}
@@ -453,18 +445,17 @@ consistency check of the chain, not an independent computation.
 \begin{figure}[t]
   \centering
   \includegraphics[width=\textwidth]{fig_validation.pdf}
-  \caption{Comparison with published measurements (\texttt{data/literature\_validation.npz};
-  Selamet values from \texttt{notebooks/harmonic\_study.ipynb}, section 5). (a) Deviation of
-  the lumped formula and of the finite-difference solver; the bar on the flask spans the
-  cavity aspect ratios tried. (b) Flask: finite-difference $f_0$ against the height of the
-  equivalent cylindrical cavity.}
+  \caption{Comparison with published measurements. (a) Deviation of the lumped formula and of
+  the finite-difference solver; the bar on the flask spans the cavity aspect ratios tried.
+  (b) Flask: finite-difference $f_0$ against the height of the equivalent cylindrical
+  cavity.}
   \label{fig:validation}
 \end{figure}
 
 \begin{table}[t]
 \centering
 \caption{Resonance frequencies (Hz) against published measurements. Finite differences on
-the 1~mm grid, no fitted parameter.}
+the 1~mm grid, not extrapolated, no fitted parameter.}
 \label{tab:published}
 \small
 \begin{tabular}{lcccc}
@@ -480,22 +471,25 @@ Indenbom \& Pogossian, flask & 351 & \flaskLumped & \flaskMin--\flaskMax & $+\fl
 
 Selamet et al.\ measured two concentric resonators with the same 4500~cm$^3$ cavity in two
 shapes ($l/d=1$ and 10) and a neck of diameter 40.44~mm and length 85~mm \citep{selamet1997}.
-They are side branches on a duct, so the neck sees a pressure node at resonance; they were
-computed with the Dirichlet mouth. The lumped formula knows only the volume and returns
-\selLumped~Hz for both, $\selLumpedDevA$\% and $\selLumpedDevB$\% from the measurements. The
-two-dimensional field recovers both to 2.2\% and 0.9\% (Table~\ref{tab:published}). These
-values are on the 1~mm grid, not extrapolated, and the deviations are of the size of the
-GCI.
+They are side branches on a duct, and were computed with the Dirichlet mouth. The lumped
+formula knows only the volume and returns \selLumped~Hz for both, $\selLumpedDevA$\% and
+$\selLumpedDevB$\% from the measurements. The two-dimensional field is within 2.2\% and
+0.9\% of both (Table~\ref{tab:published}). This agreement should not be over-read. The
+values come from the raw 1~mm grid, which on the reference geometry sits about 3\% above the
+extrapolated frequency, and the Dirichlet mouth leaves out the end correction on the duct
+side of the neck. Both effects raise the computed frequency, so a converged computation with
+the duct included would land lower, possibly below the measurements; the present agreement
+may be partly fortuitous.
 
 Indenbom and Pogossian measured an empty 100~mL Erlenmeyer flask at 351~Hz
-\citep{indenbom2023}, where the lumped formula gives 391~Hz; my lumped model reproduces
+\citep{indenbom2023}, where the lumped formula gives 391~Hz; my lumped model gives
 \flaskLumped~Hz. The flask is conical and my cavity is a cylinder, so I replaced it by a
 cylinder of equal volume and swept its aspect ratio. The solver stays between \flaskMin{}
 and \flaskMax~Hz for every shape (Fig.~\ref{fig:validation}b), \flaskDevMin--\flaskDevMax\%
-above the measurement. Resolving the field near the neck does not close the gap. In terms of
-Eq.~\eqref{eq:lumped}, the measurement corresponds to an effective neck of about 54~mm
-instead of 43~mm, which would be consistent with the neck flaring into the conical shoulder,
-a geometry this solver cannot represent. I report this as an unexplained miss.
+above the measurement, so resolving the field near the neck does not close the gap. In terms
+of Eq.~\eqref{eq:lumped}, the measurement corresponds to an effective neck of about 54~mm
+instead of 43~mm. The cause is not established; the conical shoulder, which this solver
+cannot represent, is one candidate.
 
 For damping, the same paper gives a half-width that brackets the measured $Q$ between
 \qFlaskLo{} and \qFlaskHi{} (the paper does not state whether the width is taken at half
@@ -503,42 +497,25 @@ amplitude or half power). An estimate combining viscothermal losses in the neck 
 gives about \qFlaskPred{}: the model is optimistic, in the same direction as Moloney's
 comparison \citep{moloney2004}. Neither solver contains viscothermal losses.
 
-\subsection{Neural bases: a measured negative result}
-\label{sec:bases}
+\subsection{Representing the field with neural bases}
 
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\textwidth]{fig_bases.pdf}
-  \caption{Least-squares projection of the verified field onto \basesHidden{} basis
-  functions of each family (\texttt{data/bench\_bases.npz}). (a) Relative field error.
-  (b) PDE residual of the same projection, normalised so that the zero field scores 100\%
-  (dashed line).}
-  \label{fig:bases}
-\end{figure}
-
-All neural bases represent the field well: the field error of the projection is between
-\basesErrMin\% and \basesErrMax\% (Fig.~\ref{fig:bases}a). None represents its Laplacian: the
-residual of the same projection is between \basesResMin{} and \basesResMax{} times that of the
-zero field (Fig.~\ref{fig:bases}b). The conditioning of the residual operator varies by eleven
-orders of magnitude between families (from $\kappaMin$ to $\kappaMax$), with sine
-activations far better conditioned than tanh, yet the residual barely improves. The cause is
-the structure of the solution: inside the cavity $\nabla^2 p$ and $-k^2 p$ are both large
-and nearly cancel, so a 0.15\% error on $p$ becomes an error on $\nabla^2 p$ larger than the
-source itself. The Trefftz basis is the counter-example: each function satisfies
-$\nabla^2\phi + k^2\phi = 0$ exactly, so its residual equals that of the zero field
-(\trefftzRes\%), but it cannot represent the source and fits the field only to
-\trefftzErr\%.
+Appendix~\ref{app:bases} projects the frequency-domain field onto \basesHidden{} functions
+from each of five neural bases and a Trefftz basis, without training. The projections fit
+the field to \basesErrMin--\basesErrMax\%, but their PDE residual is \basesResMin{} to
+\basesResMax{} times that of the zero field. The fits that minimise the residual instead
+reach \minResLo--\minResHi\% of the zero-field residual but miss the field entirely (field
+error of \minResErrLo\% or more). These numbers concern projections of a discrete field onto
+fixed random bases; no network is trained.
 
 % ===========================================================================
 \section{Discussion and limitations}
 
 \paragraph{What the results support.} Two solvers with different discretisations and
 different radiation models agree on the natural frequency of the reference resonator to
-\solverGap\%, inside their grid uncertainties of about 2\%, and the frequency-domain scheme
-reproduces two published resonators to within that uncertainty. The verification sequence
-found an error that the cross-check alone would have hidden: both solvers carry the same
-half-cell wall offset, so their raw values agree better than either agrees with its own
-converged value.
+\solverGap\%, inside their uncertainties of about 2\%. The verification sequence found an
+error that the cross-check alone would have hidden: both solvers carry the same half-cell
+wall offset, so their raw values agree better than either agrees with its own converged
+value.
 
 \paragraph{What they do not support.}
 \begin{itemize}
@@ -546,20 +523,19 @@ converged value.
     neck (about 0.14~mm at this frequency) is the dominant loss and is only estimated
     analytically. The $Q$ values above are radiation-only and are not predictions of a real
     resonator.
-  \item \emph{Grid convergence.} Observed orders near 1 come from the wall offset and the
-    staircase walls, so the GCI is a first-order estimate. The time-domain extrapolation
-    rests on three grids.
-  \item \emph{Geometry.} Cavities are cylinders. The flask miss is consistent with its
-    conical shoulder, but this has not been shown.
+  \item \emph{Grid convergence.} The full discretisation is first order because of the wall
+    offset and the staircase walls. The time-domain extrapolation rests on three grids and
+    carries an extra \fZeroSpread\% from the outer boundary.
+  \item \emph{Reference values.} The semi-empirical $1.51a$ uses an interior correction close
+    to this solver's own fit; against Ingard's independent value the end correction differs
+    by \dLextGapIngard\%.
+  \item \emph{Geometry.} Cavities are cylinders. The flask miss is not explained.
   \item \emph{Outer boundary.} The Cartesian PML has a 4\% reflection floor on the curved
-    boundary, and the reflection was measured with a 4~kHz-centred pulse, whose wavelength
-    is much shorter than at the resonance. The radiation $Q$ of the time-domain solver is
-    not converged in exterior size.
-  \item \emph{Comparison data.} All measurements are other authors'. Two of the three cases
-    are side-branch resonators computed with a Dirichlet mouth on a single grid.
-  \item \emph{Neural bases.} The test measures projections onto fixed random bases, not
-    trained networks, and the target is the 1~mm finite-difference field, which itself
-    satisfies the continuous equation only to discretisation accuracy.
+    boundary, the reflection was measured with a 4~kHz-centred pulse whose wavelength is much
+    shorter than at the resonance, and the radiation $Q$ is not converged in exterior size.
+  \item \emph{Comparison data.} All measurements are other authors'. The two matched cases
+    are side-branch resonators computed with a Dirichlet mouth on a single grid, so their
+    agreement may be partly fortuitous.
 \end{itemize}
 
 % ===========================================================================
@@ -567,39 +543,110 @@ converged value.
 
 A finite-difference model of an open Helmholtz resonator predicts its natural frequency
 with a stated uncertainty of about 2\%, provided that the half-cell wall offset revealed by
-the manufactured solution is extrapolated away. The end correction computed by the meshed
-exterior, \dLext$a$, is within about 3\% of the semi-empirical value, and two published
-resonators are reproduced to 0.9--2.2\%. One published resonator is missed by about 11\%,
-and damping is outside the scope of these lossless models. The next steps are a cylindrical
-PML to remove the 4\% floor, a body-fitted or cut-cell wall treatment to recover second-order
-convergence, a viscothermal boundary-layer model in the neck, and a ring-down measurement of
-a real resonator, for which the protocol and analysis script are in the repository.
+the manufactured solution is accounted for, here by extrapolation. The end correction
+computed by the meshed exterior, \dLext$a$, lies between the semi-empirical value
+($+\dLextGap\%$) and Ingard's ($+\dLextGapIngard\%$). Two published resonators are matched
+to 0.9--2.2\% under the caveats above, one is missed by about 11\%, and damping is outside
+the scope of these lossless models. The next steps are a wall treatment aligned with cell
+faces to recover second-order convergence, a cylindrical PML to remove the 4\% floor, a
+converged side-branch computation for Selamet's resonators, a viscothermal boundary-layer
+model in the neck, and a ring-down measurement of a real resonator, for which the protocol
+and analysis script are in the repository.
 
 % ===========================================================================
 \section*{Reproducibility statement}
 
 All code, data and figures are in the repository. The figures and the numbers quoted in the
-text are produced by \texttt{python paper/make\_figures.py} from versioned files in
-\texttt{data/}, and the report is built by \texttt{paper/build\_paper.sh}. Main commands and
-times on the machine used (Intel Core i7-6700HQ, 4 cores, 32~GB RAM, Windows~10; Python
-3.11.9, NumPy 2.2.6, SciPy 1.15.2, Matplotlib 3.10.6, PyTorch 2.8.0 CPU; one core per run):
+text are produced by \path{python paper/make_figures.py} from versioned files in
+\path{data/}, and the report is built by \path{paper/build_paper.sh}. Hardware and
+software: Intel Core i7-6700HQ (4 cores), 32~GB RAM, Windows~10; Python 3.11.9, NumPy 2.2.6,
+SciPy 1.15.2, Matplotlib 3.10.6, PyTorch 2.8.0 (CPU); one core per run. Code map, with
+approximate run times:
 \begin{itemize}\itemsep0pt
-  \item \texttt{verification/mms\_transient.py}: transient MMS, 15~s.
-  \item \texttt{src/transient\_solver.py} with \texttt{OR\_TMS=250} and \texttt{OR\_H} set to
-    2, 1 and 0.5: the three time-domain runs, about 1, 5 and 40~min (scaled from timed short
-    runs); then \texttt{verification/grid\_convergence.py}.
-  \item \texttt{studies/frequency\_sweep.py} with \texttt{SW\_DF=0.05}: over 195--220~Hz with
-    \texttt{SW\_H} set to 2, 1 and 0.5 (under 1, 1 and 6~min), and over 203.5--207~Hz with
-    \texttt{SW\_H=0.25} (71 solves, 9~min on a loaded machine); then
-    \texttt{verification/control\_grid.py}.
-  \item \texttt{studies/radiation\_boundaries.py}: part A (reflection) a few minutes, parts
-    B and C several hours.
-  \item \texttt{experiments/literature\_validation.py}: about 4~min.
-  \item \texttt{studies/neural\_basis\_benchmark.py}: under 1~min.
-  \item \texttt{notebooks/harmonic\_study.ipynb}: Dirichlet-mouth study, MMS, Selamet cases.
+  \item frequency-domain solver: \path{src/harmonic_solver.py}; sweeps with
+    \path{studies/frequency_sweep.py} and \texttt{SW\_DF=0.05}, over 195--220~Hz for
+    \texttt{SW\_H} = 2, 1, 0.5 (under 1, 1 and 6~min) and over 203.5--207~Hz for
+    \texttt{SW\_H=0.25} (71 solves, 9~min); four-grid analysis
+    \path{verification/control_grid.py};
+  \item time-domain solver: \path{src/transient_solver.py} with \texttt{OR\_TMS=250} and
+    \texttt{OR\_H} = 2, 1, 0.5 (about 1, 5 and 40~min); grid convergence
+    \path{verification/grid_convergence.py};
+  \item manufactured solutions: \path{verification/mms_transient.py} (15~s) and section 3
+    of \path{notebooks/harmonic_study.ipynb};
+  \item outer boundaries: \path{studies/radiation_boundaries.py} (part A a few minutes,
+    parts B and C several hours);
+  \item published measurements: \path{experiments/literature_validation.py} (about
+    4~min) and section 5 of the notebook;
+  \item neural bases: \path{studies/neural_basis_benchmark.py} (about 1~min);
+  \item neck-length study: sections 4 and 6 of the notebook.
 \end{itemize}
 
 \bibliographystyle{abbrvnat}
 \bibliography{references}
+
+% ===========================================================================
+\begin{appendices}
+
+\section{Representing the field with neural bases}
+\label{app:bases}
+
+\paragraph{Set-up.} The target is the frequency-domain field on the 1~mm grid at
+209.84~Hz, which is that grid's own resonance; on the 0.5~mm grid the same frequency is off
+resonance and the cavity response is about \offResRatio{} times weaker. The target is
+therefore a discrete solution, not the converged field. Six families of \basesHidden{}
+functions are taken at random initialisation: a tanh MLP, SIREN with $\omega_0=5$ and 8, Gabor
+atoms, a three-zone partition of unity of sine networks in the spirit of FBPINNs, and a
+Trefftz basis $J_0(\kappa_m r)Z_m(z)$. For each, two least-squares problems are solved:
+(i) the projection of the field onto the span, reporting its relative field error and its
+residual $\lVert \nabla^2\tilde p + k^2 \tilde p + F\rVert / \lVert F\rVert$, computed by
+automatic differentiation on 900 points of the fluid domain; (ii) the fit that minimises that
+residual over the span, reporting the same two numbers. A residual of 1 is what the zero
+field achieves. No boundary terms are included, and no network is trained.
+
+\paragraph{Results.} The projections fit the field to \basesErrMin--\basesErrMax\%
+(Fig.~\ref{fig:bases}a), with residuals \basesResMin{} to \basesResMax{} times that of the
+zero field (Fig.~\ref{fig:bases}b). The minimum-residual fits reach \minResLo--\minResHi\% of
+the zero-field residual, but their field error is \minResErrLo\% or more: without boundary
+terms the interior residual does not determine the field, and neither fit comes close to
+satisfying both objectives. The conditioning of the residual operator varies by
+eleven orders of magnitude between families (from $\kappaMin$ to $\kappaMax$), with sine
+activations far better conditioned than tanh, and this does not change the picture. The
+Trefftz basis satisfies $\nabla^2\phi + k^2\phi = 0$ exactly, so both of its residuals equal
+that of the zero field; it cannot carry the source and fits the field only to
+\trefftzErr\%.
+
+\paragraph{Interpretation.} On the sample points $\lVert k^2 p\rVert/\lVert F\rVert \approx
+\kTwoPoverF$, so a smooth error of 0.15\% on $p$ would contribute only about 7\% of $\lVert F
+\rVert$ through the $k^2p$ term. The residual is dominated instead by the Laplacian of the
+error: an error of relative size $\varepsilon$ varying on a length $\ell$ gives a residual of
+order $\varepsilon\,(\lVert k^2p\rVert/\lVert F\rVert)/(k\ell)^2$. For the best basis (Gabor)
+this matches the measured residual for $\ell \approx \errScale$~mm, of the order of the grid
+step. Much of the residual therefore plausibly comes from grid-scale structure of the
+discrete target (for example at the staircase walls), which no smooth basis reproduces. The test shows that projecting this
+discrete field onto these bases gives an unusable residual, and that minimising the interior
+residual alone does not recover the field; it does not show that the bases cannot represent
+the Laplacian of the continuous solution.
+
+\begin{figure}[!htb]
+  \centering
+  \includegraphics[width=\textwidth]{fig_bases.pdf}
+  \caption{Least-squares fits with \basesHidden{} functions of each family. Bars: projection
+  of the field; crosses: the fit that minimises the PDE residual. (a) Relative error on $p$.
+  (b) PDE residual in multiples of that of the zero field (dashed line).}
+  \label{fig:bases}
+\end{figure}
+
+\section{Neck-length study with the Dirichlet mouth}
+\label{app:neck}
+
+With the Dirichlet mouth, the three-grid study over five neck lengths from 2 to 6~cm gives
+observed orders between 0.87 and 0.95 and GCIs between 2.0\% and 2.3\% (mean 2.1\%;
+notebook section 4). A 0.25~mm grid for $L=2$ and 4~cm moves the observed order from 0.91 to
+1.00 and from 0.87 to 1.01, and the extrapolations by 0.20\% and 0.36\%. Fitted on the
+extrapolated frequencies, a free power law $AL^b$ and the effective-length model
+$A/\sqrt{L+\Delta L}$ cannot be told apart ($\Delta\mathrm{AICc}=0.3$); the effective-length
+fit gives $\Delta L = 0.67a$ and $A$ close to the theoretical \aTheory~m$^{1/2}$/s.
+
+\end{appendices}
 
 \end{document}

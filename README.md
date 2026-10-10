@@ -43,7 +43,7 @@ I wrote all the code here. The physics (lumped model, end corrections, baffled-p
 - [`studies/radiation_boundaries.py`](studies/radiation_boundaries.py): sponge layer, first-order Mur absorbing condition and an unsplit second-order PML in the same solver, so they can be compared on equal terms.
 - Verification: [`verification/mms_transient.py`](verification/mms_transient.py), [`verification/grid_convergence.py`](verification/grid_convergence.py), and [`notebooks/harmonic_study.ipynb`](notebooks/harmonic_study.ipynb) (self-contained frequency-domain scheme with its MMS, GCI and Selamet runs).
 - Validation: [`experiments/literature_validation.py`](experiments/literature_validation.py), and a self-tested ring-down analysis for a future bottle measurement ([`experiments/ringdown_analysis.py`](experiments/ringdown_analysis.py)).
-- [`studies/neural_basis_benchmark.py`](studies/neural_basis_benchmark.py): a training-free test of neural bases against the verified field.
+- [`studies/neural_basis_benchmark.py`](studies/neural_basis_benchmark.py): a training-free test of neural bases against the 1 mm frequency-domain field.
 
 ## How it works
 
@@ -68,7 +68,7 @@ The manufactured solution found a first-order bias. Matched to the nominal wall 
 
 ![Transient MMS](figures/mms_transient.png)
 
-Extrapolating also fixed the end correction: 1.29a from the raw 1 mm run, 1.56a after extrapolation (expected 1.51a, so about 3% off).
+Extrapolating also fixed the end correction: 1.32a from the raw 1 mm run, 1.56a after extrapolation, between the semi-empirical 1.51a (+3%) and Ingard's 1.43a (+9%).
 
 ![Grid convergence of the time-domain f0](figures/convergence_f0.png)
 
@@ -76,17 +76,17 @@ Extrapolating also fixed the end correction: 1.29a from the raw 1 mm run, 1.56a 
 
 With the original sponge layer, the radiation Q of the time-domain solver varied by a factor of six with purely numerical settings. Measuring each outer boundary against a domain four times larger showed why:
 
-| Outer boundary | Spurious reflection | Q drift, exterior 10 → 18 cm |
+| Outer boundary | Spurious reflection | Q drift, depth 10 → 18 cm, radius fixed at 12 cm |
 |---|---|---|
 | sponge layer | 44% | +26.8% |
 | first-order Mur | 5.6% | +33.5% |
 | PML | 4.0% | −1.8% |
 
-Why the PML floors at 4%, and how Q approaches the analytic value as the exterior grows: [`docs/details.md`](docs/details.md).
+The PML drift only tests the flat boundary, where the PML is nearly exact. Moving the curved boundary out as well raises Q by about 20%, and growing the whole exterior takes it from 98 to 270, towards the 286 of the frequency-domain solver: the time-domain radiation Q is not converged. Across the three treatments f0 moves by 0.46%, which I add to the time-domain uncertainty. Details in [`docs/details.md`](docs/details.md).
 
-### Neural bases: a measured negative result
+### Representing the field with neural bases
 
-Without training anything, I fitted the verified field onto each neural basis by least squares and measured the PDE residual of that best fit. tanh, SIREN, Gabor atoms and domain decomposition all represent the field to better than 0.4%, yet leave a residual 2,500 to 10,000 times that of the zero field. The cause is a near-cancellation between ∇²p and −k²p: a 0.15% error on p is a large error on ∇²p. A Trefftz basis of Bessel functions solves the homogeneous equation exactly, so its residual equals the zero field's, but it cannot carry the source and fits the field only to 4%. No network is trained in this benchmark.
+Without training anything, I projected the 1 mm field onto each neural basis by least squares and measured the PDE residual of that projection. tanh, SIREN, Gabor atoms and domain decomposition all fit the field to better than 0.4%, yet the residual of the fit is 2,500 to 10,000 times that of the zero field, and the fit that minimises the residual instead misses the field completely. The residual is dominated by the Laplacian of millimetre-scale error, about the grid step, so this says as much about fitting a discrete solution as about the bases; the full analysis is in the report. A Trefftz basis of Bessel functions solves the homogeneous equation exactly, so its residual equals the zero field's, but it cannot carry the source and fits the field only to 4%. No network is trained in this benchmark.
 
 ![Neural basis benchmark](figures/bench_bases.png)
 

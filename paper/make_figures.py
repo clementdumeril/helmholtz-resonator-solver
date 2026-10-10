@@ -94,6 +94,9 @@ b.annotate("source $F$", (80, 3), fontsize=7.5, ha="center", color="w")
 b.set(xlabel="z (mm)", ylabel="r (mm)", aspect="equal", xlim=(-2, 122), ylim=(0, 42),
       title="(b) frequency-domain solver,\n$|p|$ at " + f"{float(md['freq']):.2f} Hz")
 b.grid(False)
+cb = fig.colorbar(im, ax=b, orientation="horizontal", fraction=0.06, pad=0.32, aspect=30)
+cb.set_label(r"$|p| \,/\, \max |p|$", fontsize=7)
+cb.ax.tick_params(labelsize=6.5)
 fig.tight_layout()
 save(fig, "fig_domains.pdf")
 
@@ -166,8 +169,12 @@ if four_t:
     num("tExtShift", abs(fe2 - ft_ext) / ft_ext * 100, ".2f")
 if four_f:
     p2, fe2, g2 = richardson(*ff[1:4])
-    num("fOrderB", p2, ".2f"); num("fExtB", fe2, ".2f"); num("fGCIB", g2 * 100, ".2f")
+    num("fOrderB", p2, ".2f"); num("fExtB", fe2, ".2f"); num("fGCIB", g2 * 100, ".1f")
     num("fExtShift", abs(fe2 - ff_ext) / ff_ext * 100, ".2f")
+    ff_ext2, gf2 = fe2, g2
+    num("fRatioA", (ff[0] - ff[1]) / (ff[1] - ff[2]), ".2f")
+    num("fRatioB", (ff[1] - ff[2]) / (ff[2] - ff[3]), ".2f")
+num("tRatioA", (tf[0] - tf[1]) / (tf[1] - tf[2]), ".2f")
 if four_t and four_f:
     num("solverGapB", abs(richardson(*tf[1:4])[1] - richardson(*ff[1:4])[1])
         / richardson(*tf[1:4])[1] * 100, ".2f")
@@ -177,10 +184,13 @@ a.plot(th * 1e3, tf, "o-", color=BLUE, label="time domain (meshed exterior)")
 a.plot(fh * 1e3, ff, "s-", color=RED, label="frequency domain (impedance)")
 a.errorbar([-0.03], [ft_ext], yerr=[gt * ft_ext], fmt="o", color=BLUE, mfc="white", capsize=3)
 a.errorbar([0.03], [ff_ext], yerr=[gf * ff_ext], fmt="s", color=RED, mfc="white", capsize=3)
+if four_f:
+    a.errorbar([0.09], [ff_ext2], yerr=[gf2 * ff_ext2], fmt="D", color=RED, ms=4, capsize=2,
+               label="frequency domain, triplet 1/0.5/0.25 mm")
 a.axhline(f_theo, color="k", ls=":", lw=1, label=f"lumped, $\\Delta L = 1.51a$: {f_theo:.1f} Hz")
 a.set(xlabel="h (mm)", ylabel="$f_0$ (Hz)", xlim=(-0.12, 2.1))
-a.annotate("extrapolated to $h\\to 0$\n(Richardson, bars = GCI)", (0.12, 199.6), fontsize=7)
-a.legend(loc="upper left")
+a.annotate("extrapolated to $h\\to 0$\n(Richardson, bars = GCI)", (0.12, 211.0), fontsize=7)
+a.legend(loc="lower right", fontsize=6.5)
 fig.tight_layout()
 save(fig, "fig_convergence.pdf")
 
@@ -247,6 +257,16 @@ for k, (x, q) in enumerate(zip(xs, pm["sweep_q"])):
 num("extFspread", (pm["sweep_f0"].max() - pm["sweep_f0"].min()) / pm["sweep_f0"].min() * 100, ".2f")
 q_imp = float(np.load("data/fdm_sweep_fin.npz")["Q"])
 num("qImpedance", q_imp, ".1f")
+num("qImpHalf", float(np.load("data/fdm_sweep_h0.5.npz")["Q"]), ".1f")
+if os.path.exists("data/fdm_sweep_h0.25.npz"):
+    num("qImpQuarter", float(np.load("data/fdm_sweep_h0.25.npz")["Q"]), ".1f")
+qb = pm["rows_q"][pm["rows_treatment"] == "pml"]
+num("pmlQshallow", qb[0], ".1f"); num("pmlQdeepB", qb[1], ".1f")
+num("pmlQdeepC", pm["sweep_q"][1], ".1f")
+num("pmlRadiusJump", (pm["sweep_q"][1] / qb[1] - 1) * 100, "+.0f")
+rc = np.maximum(0.12, 0.8 * pm["sweep_zext"]) * 100
+for k, v in enumerate(rc):
+    num("extR" + "ABCD"[k], v, ".3g")
 ss = np.load("data/sponge_sensitivity.npz")
 num("spongeQmin", ss["Q"].min(), ".0f"); num("spongeQmax", ss["Q"].max(), ".0f")
 
@@ -265,16 +285,16 @@ a.set_xscale("log"); a.set_xlim(0.05, 300)
 a.set_yticks(yb); a.set_yticklabels([b_[0] for b_ in bars]); a.invert_yaxis()
 a.set(xlabel="spurious reflection (%)", title="(a) reflection against a 4$\\times$ larger domain")
 a = ax[1]
-a.plot(xs, pm["sweep_q"], "o-", color=BLUE, label="PML")
-for tr, col, mk in (("sponge", RED, "s"), ("abc", AMBER, "^")):
+a.plot(xs, pm["sweep_q"], "o-", color=BLUE, label="PML, radius $0.8\\times$depth (C)")
+for tr, col, mk in (("pml", BLUE, "o"), ("sponge", RED, "s"), ("abc", AMBER, "^")):
     sel = pm["rows_treatment"] == tr
-    a.plot(pm["rows_zext"][sel] / lam, pm["rows_q"][sel], mk + "--", color=col,
-           label={"sponge": "sponge", "abc": "first-order Mur"}[tr])
+    a.plot(pm["rows_zext"][sel] / lam, pm["rows_q"][sel], mk + "--", color=col, mfc="white",
+           label={"pml": "PML", "sponge": "sponge", "abc": "Mur"}[tr] + ", radius 12 cm (B)")
 a.axhline(q_imp, color="k", ls=":", lw=1)
-a.annotate(f"radiation impedance, Q = {q_imp:.0f}", (0.06, q_imp - 18), fontsize=7)
-a.set(xlabel="exterior depth / wavelength", ylabel="radiation $Q$",
+a.annotate(f"frequency domain, 1 mm: Q = {q_imp:.0f}", (0.27, q_imp + 5), fontsize=7, ha="right")
+a.set(ylim=(50, 312), xlabel="exterior depth / wavelength", ylabel="radiation $Q$",
       title="(b) $Q$ as the exterior grows")
-a.legend(loc="lower right")
+a.legend(loc="lower right", fontsize=6.5)
 fig.tight_layout()
 save(fig, "fig_boundaries.pdf")
 
@@ -333,19 +353,44 @@ kap = bb["kappa"][neural]
 sci = lambda v: r"{:.0f}\times10^{{{:d}}}".format(v / 10 ** int(np.floor(np.log10(v))), int(np.floor(np.log10(v))))
 NUM["kappaMin"] = sci(kap.min()); NUM["kappaMax"] = sci(kap.max())
 num("basesHidden", int(bb["hidden"]), "d")
+rmin = bb["residual_min"][neural]; emin = bb["field_error_minres"][neural]
+num("minResLo", rmin.min() * 100, ".1f"); num("minResHi", rmin.max() * 100, ".0f")
+num("minResErrLo", emin.min() * 100, ".0f")
+num("kTwoPoverF", float(bb["k2p_over_f"]), ".0f")
+# length scale on which a field error eps*|P| must vary to produce the residual R*|F|:
+# R |F| ~ eps |P| / l^2  and  |k^2 P| = K2P |F|  =>  (k l)^2 ~ eps K2P / R
+kk = 2 * np.pi * float(bb["freq"]) / C
+ig = names.index("Gabor atoms")
+ell = np.sqrt(bb["field_error"][ig] * float(bb["k2p_over_f"]) / bb["residual"][ig]) / kk
+num("errScale", ell * 1e3, ".1f")
+num("waveK", kk, ".2f")
+# the target field is the 1 mm solution at 209.84 Hz, that grid's own resonance; on the
+# 0.5 mm grid the same frequency is off resonance and the cavity response is much weaker
+s05, s10 = np.load("data/fdm_sweep_h0.5.npz"), np.load("data/fdm_sweep_h1.0.npz")
+i05 = np.argmin(abs(s05["freqs"] - 209.84)); i10 = np.argmin(abs(s10["freqs"] - 209.84))
+num("offResRatio", s10["amp_cav"][i10] / s05["amp_cav"][i05], ".0f")
 
-fig, ax = plt.subplots(1, 2, figsize=(TEXTW, 2.3), sharey=True)
+pretty = [n.replace("w0", "$\\omega_0$") for n in names]
+fig, ax = plt.subplots(1, 2, figsize=(TEXTW, 2.7), sharey=True)
 y = np.arange(len(names))
 colsb = [RED if n.startswith("tanh") else GREY if n.startswith("Trefftz") else BLUE for n in names]
-ax[0].barh(y, bb["field_error"] * 100, color=colsb)
-ax[0].set_yticks(y); ax[0].set_yticklabels(names); ax[0].invert_yaxis()
-ax[0].set(xlabel="field error of the best fit (%)", title="(a) representation of $p$")
-ax[1].barh(y, np.maximum(bb["residual"] * 100, 1e-1), color=colsb)
+ax[0].barh(y, bb["field_error"] * 100, color=colsb, label="projection of the field")
+ax[0].plot(bb["field_error_minres"] * 100, y, "kx", ms=5,
+           label="minimum-residual fit")
+ax[0].set_xscale("log"); ax[0].set_xlim(0.05, 3e8)
+ax[0].set_yticks(y); ax[0].set_yticklabels(pretty); ax[0].invert_yaxis()
+ax[0].set(xlabel="field error (%)", title="(a) error on $p$")
+ax[1].barh(y, np.maximum(bb["residual"], 1e-3), color=colsb)
+ax[1].plot(bb["residual_min"], y, "kx", ms=5)
 ax[1].set_xscale("log")
-ax[1].axvline(100, color="k", ls="--", lw=1)
-ax[1].annotate("zero field", (110, len(names) - 0.6), fontsize=7)
-ax[1].set(xlabel="PDE residual of the same fit (%)", title="(b) residual of $\\nabla^2 p + k^2 p + F$")
-fig.tight_layout()
+ax[1].axvline(1, color="k", ls="--", lw=1)
+ax[1].annotate("zero field", (1.15, len(names) - 0.6), fontsize=7)
+ax[1].set(xlabel="PDE residual (multiples of the zero field)",
+          title="(b) residual of $\\nabla^2 p + k^2 p + F$")
+h_, l_ = ax[0].get_legend_handles_labels()
+fig.legend(h_[::-1] if l_[0].startswith("minimum") else h_, ["projection of the field (bars)", "minimum-residual fit (crosses)"],
+           loc="lower center", ncol=2, fontsize=7, frameon=False)
+fig.tight_layout(rect=(0, 0.08, 1, 1))
 save(fig, "fig_bases.pdf")
 
 # ===========================================================================
@@ -361,8 +406,17 @@ num("sweepBand", float(swf["f_hi"] - swf["f_lo"]), ".2f")
 d_or1 = np.load("data/open_resonator.npz")
 S = np.pi * R_NECK ** 2; V = np.pi * R_CAV ** 2 * H_CAV
 leff = lambda f: S / (V * (2 * np.pi * f / C) ** 2)
-num("dLraw", (leff(float(d_or1["f0_meas"])) - L_NECK) / R_NECK, ".2f")
-num("dLext", (leff(ft_ext) - L_NECK) / R_NECK, ".2f")
+dl_raw = (leff(float(tf[1])) - L_NECK) / R_NECK          # damped-sinusoid fit, 1 mm
+dl_ext = (leff(ft_ext) - L_NECK) / R_NECK
+num("dLraw", dl_raw, ".2f"); num("dLext", dl_ext, ".2f")
+num("dLrawGap", (1.51 - dl_raw) / 1.51 * 100, ".0f"); num("dLextGap", (dl_ext - 1.51) / 1.51 * 100, ".0f")
+# Ingard's interior correction 0.48 sqrt(S) (1 - 1.25 a/R_cav) + flanged exterior 0.85a
+dl_ing = 0.85 + 0.85 * (1 - 1.25 * R_NECK / R_CAV)
+num("dLIngardInt", 0.85 * (1 - 1.25 * R_NECK / R_CAV), ".2f"); num("dLIngard", dl_ing, ".2f")
+f_ing = C / (2 * np.pi) * np.sqrt(S / (V * (L_NECK + dl_ing * R_NECK)))
+num("fIngard", f_ing, ".1f")
+num("dLextGapIngard", (dl_ext - dl_ing) / dl_ing * 100, ".0f")
+num("tGapIngard", (f_ing - ft_ext) / f_ing * 100, ".1f"); num("fGapIngard", (f_ing - ff_ext) / f_ing * 100, ".1f")
 
 with open(os.path.join("paper", "numbers.tex"), "w", encoding="utf-8") as fh_:
     fh_.write("% Generated by paper/make_figures.py from data/*.npz. Do not edit.\n")

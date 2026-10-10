@@ -26,7 +26,7 @@ Fourth grid (added in October 2026, `verification/control_grid.py`): a 0.25 mm s
 
 Source: [`studies/radiation_boundaries.py`](../studies/radiation_boundaries.py), data in `data/pml_study.npz`.
 
-With the original sponge layer, the radiation Q of the time-domain solver ranged from 44 to 267 depending on layer strength, thickness and domain size (`data/sponge_sensitivity.npz`), while f0 did not move. I implemented three terminations in one solver and measured each against the same run on a domain four times larger, where no reflection can return within the time window:
+With the original sponge layer, the radiation Q of the time-domain solver ranged from 44 to 267 depending on layer strength, thickness and domain size (`data/sponge_sensitivity.npz`). The f0 recorded in that study came from an FFT with a 4 Hz bin, so it cannot show whether the frequency moved. I implemented three terminations in one solver and measured each against the same run on a domain four times larger, where no reflection can return within the time window:
 
 - sponge: a damping term σ·∂p/∂t over a layer. It reflects 44% of the incident amplitude, which explains the factor of six on Q.
 - first-order Mur: ∂p/∂t + c ∂p/∂n = 0 on the outer ring, exact at normal incidence only. 5.6%.
@@ -34,20 +34,20 @@ With the original sponge layer, the radiation Q of the time-domain solver ranged
 
 The PML reaches 0.093% (−61 dB) on the flat boundary, where the Cartesian complex stretch is exact, but stays at 4.0% (−28 dB) on the curved radial boundary, because I used the Cartesian stretch in (r, z) and left out the 1/r term of a cylindrical PML. Neither a stronger σ nor a thicker layer lowers that floor.
 
-A stable Q between 10 and 18 cm of exterior is still not convergence. At 209 Hz the wavelength is 1.64 m, so a 10 cm exterior is 0.06 of a wavelength and the PML sits in the reactive near field of the mouth. Enlarging it:
+The resonator was then run in two configurations. In part B only the depth changes, from 10 to 18 cm, at a fixed radius of 12 cm: the PML Q moves by −1.8% (sponge +26.8%, Mur +33.5%), and f0 spreads by 0.46% across the three treatments. That stability only concerns the flat boundary, where the PML is nearly exact. In part C the radius grows with the depth (0.8 × depth, at least 12 cm). At 18 cm depth, moving the curved boundary from 12 to 14.4 cm raises the PML Q from 96.4 to 116.6 (+21%), so the curved boundary, which carries the 4% floor, still controls the damping. At 209 Hz the wavelength is 1.64 m, so a 10 cm exterior is 0.06 of a wavelength and the PML sits in the reactive near field of the mouth. Part C:
 
-| Exterior | In wavelengths | Radiation Q | f0 (Hz) |
-|---|---|---|---|
-| 10 cm | 0.061 | 98.1 | 208.32 |
-| 18 cm | 0.110 | 116.6 | 208.42 |
-| 30 cm | 0.183 | 187.2 | 208.53 |
-| 45 cm | 0.274 | 269.6 | 208.49 |
+| Depth | Radius | Depth in wavelengths | Radiation Q | f0 (Hz) |
+|---|---|---|---|---|
+| 10 cm | 12 cm | 0.061 | 98.1 | 208.32 |
+| 18 cm | 14.4 cm | 0.110 | 116.6 | 208.42 |
+| 30 cm | 24 cm | 0.183 | 187.2 | 208.53 |
+| 45 cm | 36 cm | 0.274 | 269.6 | 208.49 |
 
-Q climbs towards the 285.6 given by the analytic radiation impedance (`data/fdm_sweep_fin.npz`), while f0 stays within 0.1%. The largest run is consistent with convergence there but does not demonstrate it.
+Q climbs towards the 285.6 of the frequency-domain solver with the analytic impedance on the 1 mm grid (289.7 and 290.5 on the 0.5 and 0.25 mm grids), while f0 stays within 0.1%. The largest run is consistent with convergence there but does not demonstrate it.
 
 ![Outer-boundary treatments](../figures/pml_study.png)
 
-*(a) Probe signal against the large-domain reference. (b) Error over time, at the default layer strength (PML −23 dB). (c) Radiation Q against exterior size in wavelengths.*
+*(a) Probe signal against the large-domain reference (the legend says ×3; the reference domain is in fact four times larger, `ENLARGE = 4`). (b) Error over time, at the default layer strength (PML −23 dB). (c) Radiation Q against exterior size in wavelengths.*
 
 ## Validation cases
 

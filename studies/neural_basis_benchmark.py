@@ -271,9 +271,17 @@ for name, make, mode in BASES:
     resid = np.sqrt(np.mean((a_phys @ t2r + FSEL) ** 2 + (a_phys @ t2i) ** 2)) \
         / np.sqrt(np.mean(FSEL ** 2))
 
-    rows.append((name, err, resid, kappa_a, rank_a))
+    # The residual above is that of the FIELD projection. The smallest residual
+    # the span can reach at all is a separate least-squares problem, solved here
+    # on the same points, together with the field error of that minimiser.
+    t3, *_ = np.linalg.lstsq(a_phys, -FSEL, rcond=None)
+    resid_min = np.sqrt(np.mean((a_phys @ t3 + FSEL) ** 2)) / np.sqrt(np.mean(FSEL ** 2))
+    err_minres = np.linalg.norm(m_mat.numpy() @ t3 - PREF[sel]) / np.linalg.norm(PREF[sel])
+
+    rows.append((name, err, resid, kappa_a, rank_a, resid_min, err_minres))
     print(f"{name:22s} {err * 100:11.2f}% {resid * 100:21.1f}% "
-          f"{kappa_a:14.2e} {rank_a:6d}/{HID:<3d}")
+          f"{kappa_a:14.2e} {rank_a:6d}/{HID:<3d}"
+          f"   min-residual fit: residual {resid_min * 100:.1f}%, field error {err_minres * 100:.1f}%")
 
 print()
 print("Reading the table:")
@@ -287,8 +295,10 @@ print(f"Best neural basis: {best[0]}, field error {best[1] * 100:.2f} %, "
       f"residual {best[2] * 100:.0f} %")
 print(f"  -- that is {best[2]:.0f}x worse than writing down the zero field, while")
 print(f"     representing the field itself to better than {best[1] * 100:.2f} %.")
-print("  The obstacle is not capacity. The Laplacian amplifies representation")
-print("  error by 1/L^2 = 625, and the solution lives on a near-cancellation.")
+K2P = np.sqrt(np.mean(np.abs(K2 * PREF[sel]) ** 2)) / np.sqrt(np.mean(FSEL ** 2))
+print(f"  For scale: rms(k^2 P) / rms(F) = {K2P:.1f} on the same points. A small")
+print("  representation error is amplified by the Laplacian when it varies on a")
+print("  scale much shorter than the wavelength.")
 
 # --------------------------------------------------------------------------
 os.makedirs("data", exist_ok=True)
@@ -299,6 +309,9 @@ np.savez("data/bench_bases.npz",
          residual=np.array([r[2] for r in rows]),
          kappa=np.array([r[3] for r in rows]),
          rank=np.array([r[4] for r in rows]),
+         residual_min=np.array([r[5] for r in rows]),
+         field_error_minres=np.array([r[6] for r in rows]),
+         k2p_over_f=K2P,
          freq=FREQ, hidden=HID)
 
 fig, ax = plt.subplots(1, 2, figsize=(13, 4.4))
