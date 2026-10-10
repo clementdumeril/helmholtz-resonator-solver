@@ -270,7 +270,7 @@ for k, v in enumerate(rc):
 ss = np.load("data/sponge_sensitivity.npz")
 num("spongeQmin", ss["Q"].min(), ".0f"); num("spongeQmax", ss["Q"].max(), ".0f")
 
-fig, ax = plt.subplots(1, 2, figsize=(TEXTW, 2.35))
+fig, ax = plt.subplots(1, 2, figsize=(TEXTW, 2.8))
 a = ax[0]
 bars = [("sponge layer (as used)", refl["sponge"], RED),
         ("first-order Mur", refl["abc"], AMBER),
@@ -294,7 +294,7 @@ a.axhline(q_imp, color="k", ls=":", lw=1)
 a.annotate(f"frequency domain, 1 mm: Q = {q_imp:.0f}", (0.27, q_imp + 5), fontsize=7, ha="right")
 a.set(ylim=(50, 312), xlabel="exterior depth / wavelength", ylabel="radiation $Q$",
       title="(b) $Q$ as the exterior grows")
-a.legend(loc="lower right", fontsize=6.5)
+a.legend(loc="upper center", bbox_to_anchor=(0.45, -0.3), ncol=2, fontsize=6.5, frameon=False)
 fig.tight_layout()
 save(fig, "fig_boundaries.pdf")
 
@@ -356,6 +356,7 @@ num("basesHidden", int(bb["hidden"]), "d")
 rmin = bb["residual_min"][neural]; emin = bb["field_error_minres"][neural]
 num("minResLo", rmin.min() * 100, ".1f"); num("minResHi", rmin.max() * 100, ".0f")
 num("minResErrLo", emin.min() * 100, ".0f")
+NUM["minResErrHi"] = sci(emin.max() * 100)
 num("kTwoPoverF", float(bb["k2p_over_f"]), ".0f")
 # length scale on which a field error eps*|P| must vary to produce the residual R*|F|:
 # R |F| ~ eps |P| / l^2  and  |k^2 P| = K2P |F|  =>  (k l)^2 ~ eps K2P / R

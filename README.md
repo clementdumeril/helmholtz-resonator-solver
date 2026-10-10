@@ -32,7 +32,7 @@ Full report: [`paper/main.pdf`](paper/main.pdf), a 12-page preprint with the for
 
 ![Validation against published measurements](figures/literature_validation.png)
 
-*Left: deviation from published frequencies. Selamet's two resonators have the same cavity volume in two shapes; the lumped formula gives 85.8 Hz for both (−5.7% and +19%), the 2D solver recovers both. Right: predicted Q for the flask (about 40) against the published 18–30.*
+*Left: deviation from published frequencies. Selamet's two resonators have the same cavity volume in two shapes; the lumped formula gives 85.8 Hz for both (−5.7% and +19%), the 2D solver is within 0.9% and 2.2% of both, on the raw 1 mm grid and without the duct-side end correction, two effects that both raise the computed frequency, so this agreement may be partly fortuitous. Right: predicted Q for the flask (about 40) against the published 18–30.*
 
 ## What I built
 

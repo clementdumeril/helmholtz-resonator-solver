@@ -1,49 +1,49 @@
 """
-Why neural bases fail on this Helmholtz problem -- measured, without training.
+Representing the frequency-domain field with neural bases, without training.
 
-A physics-informed network minimises the PDE residual over some basis of
-functions. The usual explanation for poor results is spectral bias, and the
-usual remedy is a better basis: Fourier features, SIREN, Gabor atoms, domain
-decomposition. This script tests that explanation directly, and it needs no
-training to do so.
+Target: the frequency-domain field P computed by src/harmonic_solver.py on the
+1 mm grid at 209.84 Hz, which is that grid's own resonance. It is a discrete
+solution, not the converged field.
 
-For each family, at random initialisation, it measures two things:
+Bases: tanh MLP, SIREN (w0 = 5 and 8), Gabor atoms, a three-zone partition of
+unity of sine networks (FBPINN-like) and a Trefftz basis, each with HID
+functions at random initialisation. No network is trained.
 
-  1. PROJECTION ERROR -- the best possible least-squares fit of the verified
-     FDM field onto the basis. This is capacity: can the basis represent P at
-     all?
+For each basis, two least-squares problems are solved on the span:
 
-  2. RESIDUAL OF THAT SAME PROJECTION -- does that best-possible field satisfy
-     the equation? Normalised so that 100 % is exactly as bad as the zero
-     field.
+  1. PROJECTION of the field: relative field error, and the PDE residual
+     ||lap(p) + k^2 p + F|| / ||F|| of that projection, computed by automatic
+     differentiation on 900 points of the fluid domain.
 
-The second number is the one that matters, and it is the one nobody reports.
+  2. MINIMUM-RESIDUAL FIT: the combination that minimises the same residual,
+     with its residual and its field error.
+
+A residual of 100 % is what the zero field achieves. No boundary terms are
+included in either problem.
 
 --------------------------------------------------------------------------
-THE RESULT
+RESULT (see paper/main.pdf, Appendix A)
 --------------------------------------------------------------------------
-Every family represents the field to better than 0.4 %. Every family leaves a
-PDE residual of hundreds of thousands of percent. The best of them, Gabor, is
-still some 2500 times worse than writing down zero.
+The projections fit the field to 0.15-0.36 %, but their residual is about
+2,500 to 10,000 times that of the zero field. The minimum-residual fits reach
+0.8-19 % of the zero-field residual but miss the field (field error of 100 %
+and above). The conditioning of the residual operator varies by about eleven
+orders of magnitude between families without changing this picture.
 
-The reason is not capacity and not conditioning. In this geometry the
-Laplacian amplifies a representation error by 1/L^2 = 625, where L is the neck
-length, and the true solution lives on a near-cancellation: lap(P) and -k^2 P
-are both enormous and their difference is small. Representing P to 0.15 % is
-nowhere near enough to represent lap(P) at all.
+With ||k^2 P|| / ||F|| of about 49 on the sample points, a smooth 0.15 % error
+would contribute only a few percent of ||F||. The residual is dominated by the
+Laplacian of the error, which amplifies error varying on a short length scale;
+for the best basis the measured residual corresponds to an error varying on
+about 1.4 mm, the order of the grid step. Much of it plausibly comes from
+grid-scale structure of the discrete target. The test therefore says how these
+bases represent this discrete field, not whether they could represent the
+Laplacian of the continuous solution.
 
-What the basis does change is the conditioning of the system actually being
-solved, kappa(A_phys), and there the spread is eleven orders of magnitude --
-a real result, and a real reason to prefer sine activations. It is simply not
-the binding constraint.
+The Trefftz functions satisfy lap(phi) + k^2 phi = 0 exactly, so both of its
+residuals equal that of the zero field: it cannot carry the source without a
+particular solution supplied separately.
 
-Trefftz is the exception that proves the point: its functions satisfy
-lap(phi) + k^2 phi = 0 exactly, so A_phys is identically zero. It cannot
-misrepresent the operator because it never approximates it -- and for the same
-reason it cannot carry the source, which is why its residual sits at 100 %.
-A Trefftz method needs a particular solution supplied separately.
-
-Runs in about two minutes on a CPU. No training, no weights, no checkpoints.
+Runs in about one minute on one CPU core. No training, no weights, no checkpoints.
 
 Output: data/bench_bases.npz, figures/bench_bases.png
 Env: BB_HID (96)  BB_F (209.84)  BB_SEED (0)
@@ -246,13 +246,13 @@ for name, make, mode in BASES:
     with torch.no_grad():
         phi = fn(X if mode == "norm" else XR).numpy()
 
-    # capacity: the best possible projection of the FDM solution
+    # least-squares projection of the 1 mm finite-difference field onto the span
     thr, *_ = np.linalg.lstsq(phi, PREF.real, rcond=None)
     thi, *_ = np.linalg.lstsq(phi, PREF.imag, rcond=None)
     fit = phi @ thr + 1j * (phi @ thi)
     err = np.linalg.norm(fit - PREF) / np.linalg.norm(PREF)
 
-    # the PHYSICS matrix: this is what is actually being solved
+    # residual operator: (lap + k^2) applied to each basis function
     if mode == "trefftz":
         # lap(phi) + k^2 phi = 0 by construction, so A is identically zero.
         with torch.no_grad():
@@ -265,7 +265,7 @@ for name, make, mode in BASES:
     kappa_a = sa[0] / max(sa[-1], 1e-300)
     rank_a = int((sa > sa[0] * 1e-12).sum())
 
-    # THE test: does the best-represented field produce an acceptable residual?
+    # residual of the field projection (refitted on the sample points)
     t2r, *_ = np.linalg.lstsq(m_mat.numpy(), PREF[sel].real, rcond=None)
     t2i, *_ = np.linalg.lstsq(m_mat.numpy(), PREF[sel].imag, rcond=None)
     resid = np.sqrt(np.mean((a_phys @ t2r + FSEL) ** 2 + (a_phys @ t2i) ** 2)) \
@@ -285,16 +285,15 @@ for name, make, mode in BASES:
 
 print()
 print("Reading the table:")
-print("  field error   can the basis represent P at all?          (small = good)")
-print("  residual      does that same field satisfy the equation? (small = good)")
-print("  kappa(A_phys) conditioning of the system actually solved.")
+print("  field error   relative error of the projection of P          (small = good)")
+print("  residual      PDE residual of that projection, zero field = 100 %")
+print("  kappa(A_phys) condition number of the residual operator")
 print()
 neural = [r for r in rows if not r[0].startswith("Trefftz")]
 best = min(neural, key=lambda r: r[2])
-print(f"Best neural basis: {best[0]}, field error {best[1] * 100:.2f} %, "
+print(f"Lowest projection residual: {best[0]}, field error {best[1] * 100:.2f} %, "
       f"residual {best[2] * 100:.0f} %")
-print(f"  -- that is {best[2]:.0f}x worse than writing down the zero field, while")
-print(f"     representing the field itself to better than {best[1] * 100:.2f} %.")
+print(f"  -- {best[2]:.0f} times the residual of the zero field.")
 K2P = np.sqrt(np.mean(np.abs(K2 * PREF[sel]) ** 2)) / np.sqrt(np.mean(FSEL ** 2))
 print(f"  For scale: rms(k^2 P) / rms(F) = {K2P:.1f} on the same points. A small")
 print("  representation error is amplified by the Laplacian when it varies on a")

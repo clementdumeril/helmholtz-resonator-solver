@@ -504,7 +504,7 @@ from each of five neural bases and a Trefftz basis, without training. The projec
 the field to \basesErrMin--\basesErrMax\%, but their PDE residual is \basesResMin{} to
 \basesResMax{} times that of the zero field. The fits that minimise the residual instead
 reach \minResLo--\minResHi\% of the zero-field residual but miss the field entirely (field
-error of \minResErrLo\% or more). These numbers concern projections of a discrete field onto
+error from \minResErrLo\% to $\minResErrHi$\%, the latter for tanh). These numbers concern projections of a discrete field onto
 fixed random bases; no network is trained.
 
 % ===========================================================================
@@ -590,6 +590,15 @@ approximate run times:
 \section{Representing the field with neural bases}
 \label{app:bases}
 
+\begin{figure}[!b]
+  \centering
+  \includegraphics[width=\textwidth]{fig_bases.pdf}
+  \caption{Least-squares fits with \basesHidden{} functions of each family. Bars: projection
+  of the field; crosses: the fit that minimises the PDE residual. (a) Relative error on $p$.
+  (b) PDE residual in multiples of that of the zero field (dashed line).}
+  \label{fig:bases}
+\end{figure}
+
 \paragraph{Set-up.} The target is the frequency-domain field on the 1~mm grid at
 209.84~Hz, which is that grid's own resonance; on the 0.5~mm grid the same frequency is off
 resonance and the cavity response is about \offResRatio{} times weaker. The target is
@@ -606,7 +615,7 @@ field achieves. No boundary terms are included, and no network is trained.
 \paragraph{Results.} The projections fit the field to \basesErrMin--\basesErrMax\%
 (Fig.~\ref{fig:bases}a), with residuals \basesResMin{} to \basesResMax{} times that of the
 zero field (Fig.~\ref{fig:bases}b). The minimum-residual fits reach \minResLo--\minResHi\% of
-the zero-field residual, but their field error is \minResErrLo\% or more: without boundary
+the zero-field residual, but their field error is between \minResErrLo\% and $\minResErrHi$\% (tanh): without boundary
 terms the interior residual does not determine the field, and neither fit comes close to
 satisfying both objectives. The conditioning of the residual operator varies by
 eleven orders of magnitude between families (from $\kappaMin$ to $\kappaMax$), with sine
@@ -627,14 +636,6 @@ discrete field onto these bases gives an unusable residual, and that minimising 
 residual alone does not recover the field; it does not show that the bases cannot represent
 the Laplacian of the continuous solution.
 
-\begin{figure}[!htb]
-  \centering
-  \includegraphics[width=\textwidth]{fig_bases.pdf}
-  \caption{Least-squares fits with \basesHidden{} functions of each family. Bars: projection
-  of the field; crosses: the fit that minimises the PDE residual. (a) Relative error on $p$.
-  (b) PDE residual in multiples of that of the zero field (dashed line).}
-  \label{fig:bases}
-\end{figure}
 
 \section{Neck-length study with the Dirichlet mouth}
 \label{app:neck}
