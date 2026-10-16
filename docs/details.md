@@ -4,7 +4,7 @@ Supporting material for the [README](../README.md): the axis treatment, the freq
 
 ## Axis treatment
 
-Both solvers work on the meridian plane (r, z). On the axis the term (1/r)·∂p/∂r is 0/0; by L'Hôpital's rule it becomes ∂²p/∂r², so the Laplacian there is 2∂²p/∂r² + ∂²p/∂z², and its radial part is discretised as 4(p₁ − p₀)/h² (mirror symmetry about the axis supplies one factor of two, the limit the other).
+Both solvers work on the meridian plane (r, z). On the axis the term (1/r)·∂p/∂r is 0/0; by L'Hôpital's rule it becomes ∂²p/∂r², so the Laplacian there is 2∂²p/∂r² + ∂²p/∂z², and its radial part is discretized as 4(p₁ − p₀)/h² (mirror symmetry about the axis supplies one factor of two, the limit the other).
 
 ## Frequency-domain f0 extrapolated to zero mesh (203.4 Hz, GCI 2.0%)
 
@@ -43,7 +43,7 @@ The resonator was then run in two configurations. In part B only the depth chang
 | 30 cm | 24 cm | 0.183 | 187.2 | 208.53 |
 | 45 cm | 36 cm | 0.274 | 269.6 | 208.49 |
 
-Q climbs towards the 285.6 of the frequency-domain solver with the analytic impedance on the 1 mm grid (289.7 and 290.5 on the 0.5 and 0.25 mm grids), while f0 stays within 0.1%. The largest run is consistent with convergence there but does not demonstrate it.
+Q climbs toward the 285.6 of the frequency-domain solver with the analytic impedance on the 1 mm grid (289.7 and 290.5 on the 0.5 and 0.25 mm grids), while f0 stays within 0.1%. The largest run is consistent with convergence there but does not demonstrate it.
 
 ![Outer-boundary treatments](../figures/pml_study.png)
 
