@@ -1,6 +1,6 @@
 # Helmholtz resonator solver
 
-Two axisymmetric finite-difference solvers I wrote for an open-neck Helmholtz resonator, one in the frequency domain and one in the time domain. I verified them with manufactured solutions and grid convergence. They agree with each other to 0.6% and with published measurements to 0.9–2.2%.
+Two axisymmetric finite-difference solvers I wrote for an open-neck Helmholtz resonator, one in the frequency domain and one in the time domain. I verified them with manufactured solutions and grid convergence. They agree with each other to 0.6%. The frequency-domain model matches two published resonators (Selamet et al. 1997) to 0.9% and 2.2%, and overpredicts an Erlenmeyer flask (Indenbom & Pogossian 2023) by 10–13%.
 
 ![Transient simulation of the open resonator](figures/helmholtz_resonance.gif)
 
@@ -17,8 +17,8 @@ Reference geometry: a neck of radius 1 cm and length 4 cm on a cylindrical cavit
 | f0, time domain, extrapolated to h → 0 | 204.6 Hz, GCI 1.5% | [`verification/grid_convergence.py`](verification/grid_convergence.py) |
 | f0, frequency domain, extrapolated to h → 0 | 203.4 Hz, GCI 2.0% | [`docs/details.md`](docs/details.md) |
 | Lumped formula with end corrections | 205.6 Hz | `data/convergence_f0.npz` |
-| Selamet et al. (1997), two resonators | 0.9% and 2.2% off, no fitted parameter | [`notebooks/harmonic_study.ipynb`](notebooks/harmonic_study.ipynb) §5 |
-| Indenbom & Pogossian (2023), Erlenmeyer flask | about 11% off | [`experiments/literature_validation.py`](experiments/literature_validation.py) |
+| Selamet et al. ([1997](https://doi.org/10.1121/1.417986)), two resonators | 0.9% and 2.2% off, no fitted parameter | [`notebooks/harmonic_study.ipynb`](notebooks/harmonic_study.ipynb) §5 (Dirichlet-mouth variant, h = 1 mm) |
+| Indenbom & Pogossian ([2023](https://doi.org/10.1051/aacus/2023039)), Erlenmeyer flask | 10–13% off (387–396 Hz vs 351 Hz) | [`experiments/literature_validation.py`](experiments/literature_validation.py) |
 
 ![Validation against published measurements](figures/literature_validation.png)
 
@@ -29,7 +29,7 @@ Reference geometry: a neck of radius 1 cm and length 4 cm on a cylindrical cavit
 - [`src/harmonic_solver.py`](src/harmonic_solver.py): frequency-domain solver, sparse complex assembly, radiation impedance at the mouth.
 - [`src/transient_solver.py`](src/transient_solver.py): time-domain solver, explicit leapfrog, meshed exterior with a rigid baffle.
 - [`studies/radiation_boundaries.py`](studies/radiation_boundaries.py): sponge layer, first-order Mur and PML compared in the same solver.
-- [`verification/`](verification/): manufactured solutions and grid convergence.
+- [`verification/`](verification/): time-domain manufactured solution and grid convergence (the frequency-domain one is in [`notebooks/harmonic_study.ipynb`](notebooks/harmonic_study.ipynb) §3).
 - [`experiments/ringdown_analysis.py`](experiments/ringdown_analysis.py): analysis for a future bottle measurement ([protocol](experiments/protocol.md)).
 
 Manufactured solutions give an observed order of 2.03 (frequency domain) and 1.98 (time domain). On real geometries the staircase walls lower it, so I only compare frequencies extrapolated to h → 0.
