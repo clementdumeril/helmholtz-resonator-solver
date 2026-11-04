@@ -45,7 +45,7 @@ On the axis, L'Hôpital's rule gives ∇²p = 2∂²p/∂r² + ∂²p/∂z². Ri
 
 **Outer boundaries** ([`studies/radiation_boundaries.py`](studies/radiation_boundaries.py)). Sponge, first-order Mur, and an unsplit second-order PML (Cartesian stretch in (r, z), without the 1/r term of a cylindrical PML), all in one solver core.
 
-**Grids.** Uniform h = 2, 1 and 0.5 mm, plus a 0.25 mm control grid for the frequency-domain solver.
+Both solvers use uniform grids, h = 2, 1 and 0.5 mm, plus a 0.25 mm control grid for the frequency-domain solver.
 
 ## Results
 
