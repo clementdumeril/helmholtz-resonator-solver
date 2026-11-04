@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1200" height="616" viewBox="0 0 1200 616" font-family="Arial, Helvetica, sans-serif">
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#444"/>
+    </marker>
+  </defs>
+  <rect x="0.75" y="0.75" width="1198.5" height="614.5" rx="16" fill="#FFFFFF" stroke="#D0D7DE" stroke-width="1.5"/>
+
+  <!-- zone labels and outlines -->
+  <g fill="none" stroke="#8A9AA8" stroke-width="1.2" stroke-dasharray="6 4">
+    <rect x="24" y="24" width="264" height="352" rx="10"/>
+    <rect x="320" y="24" width="520" height="352" rx="10"/>
+    <rect x="872" y="24" width="304" height="352" rx="10"/>
+    <rect x="24" y="400" width="1152" height="196" rx="10"/>
+  </g>
+  <g font-size="15" fill="#5A6875" letter-spacing="1.2">
+    <text x="40" y="48">GEOMETRY</text>
+    <text x="336" y="48">TWO INDEPENDENT SOLVERS</text>
+    <text x="888" y="48">RESONANCE, h → 0</text>
+    <text x="40" y="424">VERIFICATION AND VALIDATION</text>
+  </g>
+
+  <!-- input -->
+  <image href="ov_geometry.png" x="40" y="62" width="232" height="153"/>
+  <rect x="40" y="62" width="232" height="153" rx="6" fill="none" stroke="#B5C0CA" stroke-width="1"/>
+  <rect x="40" y="232" width="232" height="128" rx="10" fill="#FBE5CF" stroke="#C97A2B" stroke-width="1.5"/>
+  <text x="56" y="264" font-size="22" fill="#15202A">Resonator</text>
+  <g font-size="16" fill="#5A6875">
+    <text x="56" y="292">neck a = 10 mm, L = 40 mm</text>
+    <text x="56" y="316">cavity 40 x 80 mm</text>
+    <text x="56" y="340">rigid walls, lossless air</text>
+  </g>
+
+  <!-- solvers -->
+  <rect x="336" y="62" width="488" height="134" rx="10" fill="#DCF1EE" stroke="#0D7A6F" stroke-width="1.5"/>
+  <text x="356" y="100" font-size="24" fill="#15202A">Frequency domain</text>
+  <g font-size="16" fill="#5A6875">
+    <text x="356" y="128">sparse LU, one solve per frequency</text>
+    <text x="356" y="152">radiation impedance at the mouth</text>
+  </g>
+  <text x="356" y="180" font-size="15" fill="#0D7A6F" font-family="Consolas, monospace">src/harmonic_solver.py</text>
+  <image href="ov_mode.png" x="672" y="72" width="136" height="114"/>
+  <rect x="672" y="72" width="136" height="114" rx="6" fill="none" stroke="#B5C0CA" stroke-width="1"/>
+
+  <rect x="336" y="212" width="488" height="134" rx="10" fill="#DCF1EE" stroke="#0D7A6F" stroke-width="1.5"/>
+  <text x="356" y="250" font-size="24" fill="#15202A">Time domain</text>
+  <g font-size="16" fill="#5A6875">
+    <text x="356" y="278">explicit leapfrog, broadband pulse</text>
+    <text x="356" y="302">meshed exterior, PML or Mur</text>
+  </g>
+  <text x="356" y="330" font-size="15" fill="#0D7A6F" font-family="Consolas, monospace">src/transient_solver.py</text>
+  <image href="ov_transient.png" x="648" y="226" width="160" height="105"/>
+  <rect x="648" y="226" width="160" height="105" rx="6" fill="none" stroke="#B5C0CA" stroke-width="1"/>
+
+  <text x="336" y="366" font-size="15" fill="#5A6875">Different exterior models: their agreement tests the radiation model.</text>
+
+  <!-- arrows input -> solvers -->
+  <g stroke="#444" stroke-width="2" fill="none" marker-end="url(#ah)">
+    <path d="M272,180 C304,180 304,129 334,129"/>
+    <path d="M272,180 C304,180 304,279 334,279"/>
+    <path d="M824,129 C856,129 856,96 886,96"/>
+    <path d="M824,279 C860,279 860,112 886,112"/>
+  </g>
+
+  <!-- output -->
+  <rect x="888" y="62" width="272" height="70" rx="10" fill="#F1F4F6" stroke="#8A9AA8" stroke-width="1.5"/>
+  <text x="904" y="92" font-size="22" fill="#15202A">Richardson + GCI</text>
+  <text x="904" y="118" font-size="16" fill="#5A6875">grids h = 2, 1, 0.5 mm</text>
+
+  <text x="904" y="176" font-size="30" fill="#15202A">203.4 Hz</text>
+  <text x="1040" y="176" font-size="16" fill="#5A6875">frequency</text>
+  <text x="904" y="216" font-size="30" fill="#15202A">204.6 Hz</text>
+  <text x="1040" y="216" font-size="16" fill="#5A6875">time</text>
+  <text x="904" y="264" font-size="32" fill="#B8461F">0.6 % apart</text>
+  <text x="904" y="290" font-size="16" fill="#5A6875">GCI 2.0 % and 1.5 %</text>
+  <line x1="904" y1="308" x2="1160" y2="308" stroke="#D0D7DE" stroke-width="1"/>
+  <text x="904" y="332" font-size="16" fill="#15202A">Selamet et al. 1997:</text>
+  <text x="904" y="354" font-size="16" fill="#15202A">0.9 % and 2.2 % off, no fit</text>
+
+  <!-- bottom band -->
+  <g>
+    <image href="ov_convergence.png" x="40" y="436" width="248" height="153"/>
+    <rect x="40" y="436" width="248" height="153" rx="6" fill="none" stroke="#B5C0CA" stroke-width="1"/>
+    <text x="300" y="470" font-size="18" fill="#15202A">Grid study</text>
+    <text x="300" y="496" font-size="16" fill="#5A6875">time domain,</text>
+    <text x="300" y="518" font-size="16" fill="#5A6875">3 grids</text>
+
+    <image href="ov_mms.png" x="424" y="436" width="248" height="154"/>
+    <rect x="424" y="436" width="248" height="154" rx="6" fill="none" stroke="#B5C0CA" stroke-width="1"/>
+    <text x="684" y="470" font-size="18" fill="#15202A">Manufactured</text>
+    <text x="684" y="492" font-size="18" fill="#15202A">solution</text>
+    <text x="684" y="518" font-size="16" fill="#5A6875">order 2.03</text>
+    <text x="684" y="540" font-size="16" fill="#5A6875">and 1.98</text>
+
+    <image href="ov_validation.png" x="808" y="436" width="248" height="155"/>
+    <rect x="808" y="436" width="248" height="155" rx="6" fill="none" stroke="#B5C0CA" stroke-width="1"/>
+    <text x="1068" y="470" font-size="18" fill="#15202A">Published</text>
+    <text x="1068" y="492" font-size="18" fill="#15202A">data</text>
+    <text x="1068" y="518" font-size="16" fill="#5A6875">flask +10</text>
+    <text x="1068" y="540" font-size="16" fill="#5A6875">to 13 %</text>
+  </g>
+</svg>
