@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use this code or data, please cite it as below."
+title: "Two independent finite-difference solvers for an open Helmholtz resonator: verification and comparison with published measurements"
+authors:
+  - family-names: "Dumeril"
+    given-names: "Clément"
+    affiliation: "University of California, Berkeley"
+repository-code: "https://github.com/clementdumeril/helmholtz-resonator-solver"
+license: MIT
+type: software
+keywords:
+  - acoustics
+  - Helmholtz resonator
+  - finite-difference method
+  - verification and validation
+  - perfectly matched layer
